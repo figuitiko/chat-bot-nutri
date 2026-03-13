@@ -1,0 +1,184 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum BotRuleMatchType {
+  EXACT
+  KEYWORD
+  CONTAINS
+  FALLBACK
+}
+
+enum TemplateChannel {
+  WHATSAPP
+}
+
+enum TemplateKind {
+  TEXT
+  TWILIO_CONTENT_TEMPLATE
+}
+
+enum ConversationStatus {
+  OPEN
+  CLOSED
+  ESCALATED
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum MessageChannel {
+  WHATSAPP
+}
+
+enum MessageProvider {
+  TWILIO
+}
+
+enum MessageType {
+  TEXT
+  TEMPLATE
+  SYSTEM
+}
+
+enum MessageStatus {
+  RECEIVED
+  QUEUED
+  SENT
+  DELIVERED
+  FAILED
+  READ
+}
+
+enum WebhookSource {
+  TWILIO_INBOUND
+  TWILIO_STATUS
+}
+
+model Contact {
+  id             String         @id @default(cuid())
+  phone          String         @unique
+  waId           String?
+  name           String?
+  profileName    String?
+  locale         String         @default("es-MX")
+  isOptedIn      Boolean        @default(true)
+  lastInboundAt  DateTime?
+  lastOutboundAt DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  conversations  Conversation[]
+  messages       Message[]
+}
+
+model BotFlow {
+  id                  String         @id @default(cuid())
+  key                 String         @unique
+  name                String
+  description         String?
+  isActive            Boolean        @default(true)
+  fallbackTemplateKey String?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  conversations       Conversation[]
+  rules               BotRule[]
+}
+
+model BotRule {
+  id                  String           @id @default(cuid())
+  flowId              String
+  matchType           BotRuleMatchType
+  pattern             String
+  responseTemplateKey String
+  priority            Int              @default(100)
+  isActive            Boolean          @default(true)
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  flow                BotFlow          @relation(fields: [flowId], references: [id], onDelete: Cascade)
+
+  @@index([flowId, priority])
+}
+
+model MessageTemplate {
+  id               String          @id @default(cuid())
+  key              String          @unique
+  name             String
+  channel          TemplateChannel @default(WHATSAPP)
+  kind             TemplateKind    @default(TEXT)
+  body             String
+  twilioContentSid String?
+  language         String          @default("es-MX")
+  isActive         Boolean         @default(true)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+}
+
+model Conversation {
+  id            String             @id @default(cuid())
+  contactId     String
+  flowId        String?
+  status        ConversationStatus @default(OPEN)
+  lastMessageAt DateTime           @default(now())
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  contact       Contact            @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  flow          BotFlow?           @relation(fields: [flowId], references: [id], onDelete: SetNull)
+  messages      Message[]
+
+  @@unique([contactId, flowId])
+  @@index([contactId])
+}
+
+model Message {
+  id                 String           @id @default(cuid())
+  contactId          String
+  conversationId     String?
+  direction          MessageDirection
+  channel            MessageChannel   @default(WHATSAPP)
+  provider           MessageProvider  @default(TWILIO)
+  providerMessageSid String?          @unique
+  body               String
+  messageType        MessageType
+  status             MessageStatus
+  templateKey        String?
+  errorCode          String?
+  errorMessage       String?
+  rawPayload         Json
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  contact            Contact          @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  conversation       Conversation?    @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+
+  @@index([contactId])
+  @@index([providerMessageSid])
+  @@index([status])
+}
+
+model WebhookEvent {
+  id          String        @id @default(cuid())
+  source      WebhookSource
+  eventId     String?
+  payload     Json
+  processedAt DateTime?
+  status      String
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@unique([source, eventId])
+}
+
+model ApiKey {
+  id        String   @id @default(cuid())
+  name      String
+  keyHash   String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
