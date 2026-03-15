@@ -3,7 +3,18 @@ import { AppError } from "@/lib/http";
 import type { BotMatch } from "@/types/bot";
 
 function normalizeText(text: string) {
-  return text.trim().toLowerCase();
+  return text
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function tokenizeText(text: string) {
+  return normalizeText(text).split(" ").filter(Boolean);
 }
 
 function matchesPattern(matchType: string, pattern: string, text: string) {
@@ -14,7 +25,7 @@ function matchesPattern(matchType: string, pattern: string, text: string) {
     case "EXACT":
       return normalizedText === normalizedPattern;
     case "KEYWORD":
-      return normalizedText.split(/\s+/).includes(normalizedPattern);
+      return tokenizeText(text).includes(normalizedPattern);
     case "CONTAINS":
       return normalizedText.includes(normalizedPattern);
     case "FALLBACK":
@@ -46,6 +57,8 @@ export async function matchBotRule(input: {
     throw new AppError("FLOW_NOT_FOUND", `Flow "${input.flowKey}" was not found or is inactive.`, 404);
   }
 
+  let firstFallback: BotMatch | null = null;
+
   for (const flow of flows) {
     const directMatch = flow.rules.find(
       (rule) => rule.matchType !== "FALLBACK" && matchesPattern(rule.matchType, rule.pattern, input.text),
@@ -62,8 +75,8 @@ export async function matchBotRule(input: {
 
     const fallback = flow.rules.find((rule) => rule.matchType === "FALLBACK");
 
-    if (fallback) {
-      return {
+    if (fallback && !firstFallback) {
+      firstFallback = {
         flowKey: flow.key,
         ruleId: fallback.id,
         responseTemplateKey: fallback.responseTemplateKey,
@@ -72,5 +85,5 @@ export async function matchBotRule(input: {
     }
   }
 
-  return null;
+  return firstFallback;
 }

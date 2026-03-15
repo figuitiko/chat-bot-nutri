@@ -79,7 +79,10 @@ async function main() {
       fallbackTemplateKey: "welcome",
       rules: [
         { matchType: BotRuleMatchType.EXACT, pattern: "hola", responseTemplateKey: "welcome", priority: 1 },
-        { matchType: BotRuleMatchType.EXACT, pattern: "menu", responseTemplateKey: "welcome", priority: 2 },
+        { matchType: BotRuleMatchType.EXACT, pattern: "hi", responseTemplateKey: "welcome", priority: 2 },
+        { matchType: BotRuleMatchType.EXACT, pattern: "hello", responseTemplateKey: "welcome", priority: 3 },
+        { matchType: BotRuleMatchType.EXACT, pattern: "menu", responseTemplateKey: "welcome", priority: 4 },
+        { matchType: BotRuleMatchType.CONTAINS, pattern: "informacion", responseTemplateKey: "welcome", priority: 5 },
         { matchType: BotRuleMatchType.FALLBACK, pattern: "*", responseTemplateKey: "welcome", priority: 999 },
       ],
     },
@@ -92,6 +95,10 @@ async function main() {
         { matchType: BotRuleMatchType.EXACT, pattern: "1", responseTemplateKey: "pricing", priority: 1 },
         { matchType: BotRuleMatchType.KEYWORD, pattern: "precio", responseTemplateKey: "pricing", priority: 2 },
         { matchType: BotRuleMatchType.KEYWORD, pattern: "precios", responseTemplateKey: "pricing", priority: 3 },
+        { matchType: BotRuleMatchType.KEYWORD, pattern: "cotizacion", responseTemplateKey: "pricing", priority: 4 },
+        { matchType: BotRuleMatchType.KEYWORD, pattern: "costos", responseTemplateKey: "pricing", priority: 5 },
+        { matchType: BotRuleMatchType.CONTAINS, pattern: "cuanto cuesta", responseTemplateKey: "pricing", priority: 6 },
+        { matchType: BotRuleMatchType.CONTAINS, pattern: "quiero precios", responseTemplateKey: "pricing", priority: 7 },
       ],
     },
     {
@@ -103,6 +110,9 @@ async function main() {
         { matchType: BotRuleMatchType.EXACT, pattern: "2", responseTemplateKey: "hours", priority: 1 },
         { matchType: BotRuleMatchType.KEYWORD, pattern: "horario", responseTemplateKey: "hours", priority: 2 },
         { matchType: BotRuleMatchType.KEYWORD, pattern: "horarios", responseTemplateKey: "hours", priority: 3 },
+        { matchType: BotRuleMatchType.CONTAINS, pattern: "a que hora", responseTemplateKey: "hours", priority: 4 },
+        { matchType: BotRuleMatchType.CONTAINS, pattern: "que horario manejan", responseTemplateKey: "hours", priority: 5 },
+        { matchType: BotRuleMatchType.CONTAINS, pattern: "quiero horarios", responseTemplateKey: "hours", priority: 6 },
       ],
     },
     {
@@ -114,6 +124,9 @@ async function main() {
         { matchType: BotRuleMatchType.EXACT, pattern: "3", responseTemplateKey: "location", priority: 1 },
         { matchType: BotRuleMatchType.KEYWORD, pattern: "ubicacion", responseTemplateKey: "location", priority: 2 },
         { matchType: BotRuleMatchType.KEYWORD, pattern: "direccion", responseTemplateKey: "location", priority: 3 },
+        { matchType: BotRuleMatchType.KEYWORD, pattern: "donde", responseTemplateKey: "location", priority: 4 },
+        { matchType: BotRuleMatchType.CONTAINS, pattern: "donde estan", responseTemplateKey: "location", priority: 5 },
+        { matchType: BotRuleMatchType.CONTAINS, pattern: "quiero ubicacion", responseTemplateKey: "location", priority: 6 },
       ],
     },
     {
@@ -125,6 +138,10 @@ async function main() {
         { matchType: BotRuleMatchType.EXACT, pattern: "4", responseTemplateKey: "human_handoff", priority: 1 },
         { matchType: BotRuleMatchType.KEYWORD, pattern: "asesor", responseTemplateKey: "human_handoff", priority: 2 },
         { matchType: BotRuleMatchType.CONTAINS, pattern: "hablar con", responseTemplateKey: "human_handoff", priority: 3 },
+        { matchType: BotRuleMatchType.CONTAINS, pattern: "hablar con un asesor", responseTemplateKey: "human_handoff", priority: 4 },
+        { matchType: BotRuleMatchType.CONTAINS, pattern: "quiero hablar con alguien", responseTemplateKey: "human_handoff", priority: 5 },
+        { matchType: BotRuleMatchType.CONTAINS, pattern: "atencion humana", responseTemplateKey: "human_handoff", priority: 6 },
+        { matchType: BotRuleMatchType.KEYWORD, pattern: "humano", responseTemplateKey: "human_handoff", priority: 7 },
       ],
     },
     {
