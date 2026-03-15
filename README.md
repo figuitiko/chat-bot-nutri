@@ -154,6 +154,7 @@ curl -X POST http://localhost:3000/api/flows/execute \
 - There is no dashboard UI in the MVP.
 - Keep all credentials server-side only.
 - On Vercel, provision PostgreSQL separately and configure all environment variables in the project settings.
+- The repository includes [vercel.json](/Users/frank/Workspace/next-js/chat-bot/vercel.json), which overrides the Vercel install step to `npm ci --loglevel=error` so upstream npm deprecation warnings from Twilio do not clutter deployment logs.
 - Rotate `INTERNAL_API_KEY` regularly and consider managing additional keys via the `ApiKey` table.
 - Structured JSON logging is enabled for webhook processing and Twilio send failures.
 
