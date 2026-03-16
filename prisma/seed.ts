@@ -16,9 +16,6 @@ if (!databaseUrl) {
   throw new Error("DATABASE_URL is required to run the Prisma seed.");
 }
 
-const baseUrl =
-  process.env.TWILIO_WEBHOOK_BASE_URL?.replace(/\/$/, "") ?? "https://example.com";
-
 const prisma = new PrismaClient({
   adapter: new PrismaPg({
     connectionString: databaseUrl,
@@ -97,7 +94,7 @@ const templates = [
     key: "training_eta_activity",
     name: "Modulo 1 - Actividad ETAs",
     body: "Ahora descarga el formato y vas a crear las principales enfermedades transmitidas por alimentos.\nTómate tu tiempo y cuando termines escribe: CONTINUAR",
-    mediaUrl: `${baseUrl}/training-assets/modulo-1-eta-agentes.png`,
+    mediaUrl: "/training-assets/modulo-1-eta-agentes.png",
     kind: TemplateKind.TEXT,
   },
   {

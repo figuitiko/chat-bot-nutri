@@ -1,6 +1,7 @@
 import { MessageStatus, MessageType } from "@/generated/prisma/client";
 
 import { db } from "@/lib/db";
+import { env } from "@/lib/env";
 import { AppError } from "@/lib/http";
 import { logger } from "@/lib/logger";
 import { normalizePhone } from "@/lib/phone";
@@ -57,6 +58,29 @@ async function getFlowWithEntryStep(flowKey: string) {
   return { flow, entryStep };
 }
 
+function resolveTemplateMediaUrl(mediaUrl: string | null | undefined) {
+  if (!mediaUrl) {
+    return undefined;
+  }
+
+  if (/^https?:\/\//i.test(mediaUrl)) {
+    return mediaUrl;
+  }
+
+  const baseUrl = env.TWILIO_WEBHOOK_BASE_URL.replace(/\/$/, "");
+  const path = mediaUrl.startsWith("/") ? mediaUrl : `/${mediaUrl}`;
+
+  return `${baseUrl}${path}`;
+}
+
+function buildFallbackBody(body: string, mediaUrl?: string) {
+  if (!mediaUrl) {
+    return body;
+  }
+
+  return `${body}\n\nRecurso: ${mediaUrl}`;
+}
+
 export async function sendTemplateByKey(input: {
   contactId: string;
   contactPhone: string;
@@ -97,11 +121,37 @@ export async function sendTemplateByKey(input: {
     }
 
     const body = renderTemplateBody(ensureTemplateBody(template.body), input.variables);
-    const providerMessage = await sendWhatsAppTextMessage({
-      to: input.contactPhone,
-      body,
-      mediaUrl: template.mediaUrl ?? undefined,
-    });
+    const resolvedMediaUrl = resolveTemplateMediaUrl(template.mediaUrl);
+    let providerMessage;
+
+    try {
+      providerMessage = await sendWhatsAppTextMessage({
+        to: input.contactPhone,
+        body,
+        mediaUrl: resolvedMediaUrl,
+      });
+    } catch (error) {
+      const errorCode =
+        typeof error === "object" && error !== null && "code" in error
+          ? String(error.code)
+          : undefined;
+      const shouldRetryWithoutMedia = Boolean(resolvedMediaUrl) && errorCode === "63019";
+
+      if (!shouldRetryWithoutMedia) {
+        throw error;
+      }
+
+      logger.warn("twilio.media.retry_without_media", {
+        contactPhone: input.contactPhone,
+        templateKey: input.templateKey,
+        mediaUrl: resolvedMediaUrl,
+      });
+
+      providerMessage = await sendWhatsAppTextMessage({
+        to: input.contactPhone,
+        body: buildFallbackBody(body, resolvedMediaUrl),
+      });
+    }
 
     const persisted = await storeOutboundMessage({
       body,
