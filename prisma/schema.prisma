@@ -159,6 +159,7 @@ model MessageTemplate {
   channel          TemplateChannel @default(WHATSAPP)
   kind             TemplateKind    @default(TEXT)
   body             String
+  mediaUrl         String?
   twilioContentSid String?
   language         String          @default("es-MX")
   isActive         Boolean         @default(true)

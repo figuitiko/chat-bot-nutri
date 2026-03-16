@@ -8,12 +8,17 @@ const client = twilio(env.TWILIO_ACCOUNT_SID, env.TWILIO_AUTH_TOKEN);
 export async function sendWhatsAppTextMessage(input: {
   to: string;
   body: string;
+  mediaUrl?: string | string[];
   statusCallbackUrl?: string;
 }) {
   return client.messages.create({
     from: env.TWILIO_WHATSAPP_FROM,
     to: normalizeWhatsAppAddress(input.to),
     body: input.body,
+    mediaUrl:
+      typeof input.mediaUrl === "string"
+        ? [input.mediaUrl]
+        : input.mediaUrl,
     statusCallback: input.statusCallbackUrl ?? env.TWILIO_STATUS_CALLBACK_URL,
   });
 }

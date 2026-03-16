@@ -16,6 +16,9 @@ if (!databaseUrl) {
   throw new Error("DATABASE_URL is required to run the Prisma seed.");
 }
 
+const baseUrl =
+  process.env.TWILIO_WEBHOOK_BASE_URL?.replace(/\/$/, "") ?? "https://example.com";
+
 const prisma = new PrismaClient({
   adapter: new PrismaPg({
     connectionString: databaseUrl,
@@ -44,7 +47,6 @@ type SeedTransition = {
   matchType: BotRuleMatchType;
   pattern: string;
   nextStepKey: string;
-  nextFlowKey?: string;
   outputValue?: string;
   priority: number;
 };
@@ -62,33 +64,100 @@ type SeedFlow = {
 
 const templates = [
   {
-    key: "welcome",
-    name: "Bienvenida",
-    body: "Hola, soy el asistente virtual. Responde con: 1) Precios 2) Horarios 3) Ubicacion 4) Hablar con un asesor 5) Crear un curso",
+    key: "training_welcome_intro",
+    name: "Capacitacion - Bienvenida",
+    body: "Hola soy Nutrigi\nACYGP Entidad certificadora\n\n🎊🔓 ¡Que gusto tenerte aquí! Soy tu facilitadora virtual.\nEstas en el nivel inicial de tu capacitacion.\nDurante tu capacitacion recorreras 4 modulos:\nI. Verificacion de condiciones para la preparacion de alimentos higienicamente en el expendio escolar.\nII. Ejecucion de practicas higienicas antes de preparar alimentos en el expendio escolar.\nIII. Preparacion de alimentos y bebidas nutritivas de acuerdo con la normatividad para expendios escolares.\nIV. Proporcionar los alimentos a la comunidad escolar en el expendio.\n\n💡 Si durante el recorrido necesitas ayuda, escribe AYUDA aqui en WhatsApp.\n\n¡Tu decides en que momento avanzar!\nPuedes dedicarle 60 minutos al dia y te recomiendo tener una libreta para anotar lo que vas aprendiendo.\n\n¿Estas lista/o para emprender este nuevo recorrido?\nEscribe: SI VAMOS",
     kind: TemplateKind.TEXT,
   },
   {
-    key: "pricing",
-    name: "Precios",
-    body: "Con gusto te compartimos nuestros precios. Si deseas una cotizacion personalizada, responde ASESOR.",
+    key: "training_materials_intro",
+    name: "Capacitacion - Materiales",
+    body: "¡Excelente!\nDe ahora en adelante te presentare videos, audios, infografias, imagenes y algunas lecturas.\nPara ver los videos deberas presionar en los enlaces de color azul cada vez que te aparezcan.\nNo olvides que luego de ver cada video siempre debes regresar aqui a este chat de WhatsApp para seguir aprendiendo.\n\nSelecciona aqui para descargar tu manual de trabajo: [PENDIENTE_LINK_MANUAL]\n\n🤖📲 ¡Antes de olvidarme!\nSi abandonas el chat por mas de 24 horas, podrias perder tus avances y tendrias que regresar a tu capacitacion desde cero.\nTe enviaremos algunos recordatorios para ayudarte a continuar.\n\nCuando estes lista/o escribe: VAMOS",
     kind: TemplateKind.TEXT,
   },
   {
-    key: "hours",
-    name: "Horarios",
-    body: "Nuestro horario es de lunes a viernes de 9:00 a 18:00.",
+    key: "training_module_1_intro",
+    name: "Modulo 1 - Introduccion",
+    body: "Recuerda seguir las instrucciones unicamente de este chat.\n⭐ Comenzamos con el modulo I:\nVerificacion de condiciones para la preparacion de alimentos higienicamente en el expendio escolar.\nEncontraras 12 temas y al finalizar podras desbloquear el modulo II.\n\n➡️ Mira el video seleccionando el link de color azul y aprenderas los conceptos basicos de higiene, nutricion, centro escolar y cooperativa/tienda/cafeteria escolar.\n[PENDIENTE_LINK_VIDEO_MODULO_1]\n\nSi estas lista/o avísame escribiendo: VAMOS",
     kind: TemplateKind.TEXT,
   },
   {
-    key: "location",
-    name: "Ubicacion",
-    body: "Estamos ubicados en [DIRECCION].",
+    key: "training_cafeteria_experience",
+    name: "Modulo 1 - Experiencia cafeteria",
+    body: "¿Hace cuanto tiempo tienes tu cafeteria?\n1) Menos de 6 meses\n2) Entre 6 meses y 1 año\n3) Entre 1 y 2 años\n4) Mas de 2 años",
     kind: TemplateKind.TEXT,
   },
   {
-    key: "human_handoff",
-    name: "Transferencia humana",
-    body: "Perfecto, uno de nuestros asesores te contactara en breve.",
+    key: "training_eta_audio",
+    name: "Modulo 1 - ETAs audio",
+    body: "Selecciona aqui para descargar el video: [PENDIENTE_LINK_VIDEO_ETA]\nTe recomiendo tomar nota en tu libreta para que no te pierdas de nada.\n\n👀 Te comparto este audio sobre las Enfermedades Transmitidas por los Alimentos (ETA's):\n[PENDIENTE_LINK_AUDIO_ETA]\n\nCuando quieras avanzar escribe: VAMOS",
+    kind: TemplateKind.TEXT,
+  },
+  {
+    key: "training_eta_activity",
+    name: "Modulo 1 - Actividad ETAs",
+    body: "Ahora descarga el formato y vas a crear las principales enfermedades transmitidas por alimentos.\nTómate tu tiempo y cuando termines escribe: CONTINUAR",
+    mediaUrl: `${baseUrl}/training-assets/modulo-1-eta-agentes.png`,
+    kind: TemplateKind.TEXT,
+  },
+  {
+    key: "training_supply_chain",
+    name: "Modulo 1 - Cadena de suministro",
+    body: "➡️ Selecciona el link para ver este video y descubre la cadena de suministro de alimentos y los tipos principales de contaminacion alimentaria.\n[PENDIENTE_LINK_VIDEO_CADENA_SUMINISTRO]\n\nAl terminar, escribe: CONTINUEMOS",
+    kind: TemplateKind.TEXT,
+  },
+  {
+    key: "training_regulation_intro",
+    name: "Modulo 1 - Marco normativo",
+    body: "✅ Aprenderas sobre el marco normativo en Mexico para la higiene y preparacion de alimentos, basado en la Ley General de Salud y la NOM-251-SSA1-2009.\nEsta norma establece practicas obligatorias de higiene para el proceso de alimentos, bebidas o suplementos, incluyendo instalaciones, equipos, personal y control de operaciones para garantizar la inocuidad.\n\n⭐ Descarga la norma:\nhttps://dof.gob.mx/nota_detalle.php%3Fcodigo%3D5133449%26fecha%3D01/03/2010&print=true\n\nTómate tu tiempo y cuando termines escribe: CONTINUAR",
+    kind: TemplateKind.TEXT,
+  },
+  {
+    key: "training_hygiene_summary",
+    name: "Modulo 1 - Resumen higiene",
+    body: "✅ Los equipos, utensilios y superficies en contacto con alimentos deben ser de materiales lisos, no porosos y de facil limpieza.\n✅ Deben lavarse y desinfectarse para evitar contaminacion.\n✅ Las instalaciones, incluyendo pisos, paredes y techos, deben mantenerse limpias y en buen estado.\n✅ Es obligatorio el lavado de manos del personal antes de iniciar labores, al regresar de ausencias y despues de manipular material sucio.\n✅ Los establecimientos deben contar con agua potable para la limpieza y desinfeccion.\n\nCuando quieras avanzar escribe: VAMOS",
+    kind: TemplateKind.TEXT,
+  },
+  {
+    key: "training_cleaning_schedule",
+    name: "Modulo 1 - Calendarizacion limpieza",
+    body: "➡️ Selecciona el link para ver este video y descubre como es el procedimiento de limpieza y desinfectado especifico para instalaciones, equipos y transporte.\n[PENDIENTE_LINK_VIDEO_LIMPIEZA]\n\n✅ Ahora hagamos una calendarizacion y frecuencia por area o por equipo, con la persona responsable de llevarlo a cabo.\nDescarga el formato y trabajemos:\n[PENDIENTE_LINK_FORMATO_CALENDARIZACION]\n\nCuando estes lista/o escribe: VAMOS",
+    kind: TemplateKind.TEXT,
+  },
+  {
+    key: "training_drying_quiz",
+    name: "Modulo 1 - Quiz secado",
+    body: "✅ ➡️ Selecciona el link para ver este video y descubre el proceso de limpieza y secado.\n[PENDIENTE_LINK_VIDEO_SECADO]\n\n💡 ¿La norma menciona que el equipo y los utensilios no se sequen al aire libre para evitar la contaminacion por trapos o paños, los cuales pueden albergar bacterias?\nResponde: VERDADERO o FALSO",
+    kind: TemplateKind.TEXT,
+  },
+  {
+    key: "training_temperature_control",
+    name: "Modulo 1 - Control temperatura",
+    body: "✅ ➡️ Selecciona el link para ver este video y descubre el control de temperaturas de los alimentos.\n[PENDIENTE_LINK_VIDEO_TEMPERATURA]\n\n🚨 Si deseas avanzar, por favor escribe exactamente: CONTINUAR",
+    kind: TemplateKind.TEXT,
+  },
+  {
+    key: "training_services_infographic",
+    name: "Modulo 1 - Servicios",
+    body: "✅ ➡️ Selecciona el link y descarga la infografia de recomendaciones de los servicios de agua, aire y energia en tu establecimiento.\n[PENDIENTE_LINK_INFOGRAFIA_SERVICIOS]\n\nCuando estes lista/o escribe: CONTINUAR",
+    kind: TemplateKind.TEXT,
+  },
+  {
+    key: "training_evaluation_intro",
+    name: "Modulo 1 - Evaluacion",
+    body: "📚 ¡Ya llega la evaluacion!\nSi necesitas revisar el material, puedes tomar unos minutos para hacerlo.\n\nCuando quieras avanzar escribe: TEST\nTu respuesta esperada sera de tipo Correcto o Incorrecto.",
+    kind: TemplateKind.TEXT,
+  },
+  {
+    key: "training_module_2_intro",
+    name: "Modulo 2 - Intro",
+    body: "✨ ¡No pierdas la motivacion en este avance!\nSeguiremos aprendiendo con la misma dinamica: videos, imagenes, audios, infografias y algunas lecturas.\nNo olvides seguir tomando nota.\n\n🤩 ¡Vamos al modulo 2!",
+    kind: TemplateKind.TEXT,
+  },
+  {
+    key: "conversation_cancelled",
+    name: "Conversacion cancelada",
+    body: "Conversacion cancelada. Si deseas comenzar de nuevo, responde MENU.",
     kind: TemplateKind.TEXT,
   },
   {
@@ -103,224 +172,175 @@ const templates = [
     body: "Te recordamos que tienes un pago pendiente por {{monto}} con vencimiento {{fecha}}.",
     kind: TemplateKind.TEXT,
   },
-  {
-    key: "course_creation_intro",
-    name: "Curso - nombre",
-    body: "Vamos a crear tu curso. Cual es el nombre del curso?",
-    kind: TemplateKind.TEXT,
-  },
-  {
-    key: "course_creation_category",
-    name: "Curso - categoria",
-    body: "Perfecto. Que categoria deseas? 1) Programacion 2) Diseno 3) Marketing",
-    kind: TemplateKind.TEXT,
-  },
-  {
-    key: "course_creation_level",
-    name: "Curso - nivel",
-    body: "Que nivel tendra el curso? 1) Basico 2) Intermedio 3) Avanzado",
-    kind: TemplateKind.TEXT,
-  },
-  {
-    key: "course_creation_duration",
-    name: "Curso - duracion",
-    body: "Cuanto durara el curso? Puedes responder algo como 4 semanas o 12 horas.",
-    kind: TemplateKind.TEXT,
-  },
-  {
-    key: "course_creation_price",
-    name: "Curso - precio",
-    body: "Cual sera el precio del curso? Ejemplo: 1999 MXN",
-    kind: TemplateKind.TEXT,
-  },
-  {
-    key: "course_creation_confirm",
-    name: "Curso - confirmacion",
-    body: "Confirma los datos del curso:\nNombre: {{courseName}}\nCategoria: {{courseCategory}}\nNivel: {{courseLevel}}\nDuracion: {{courseDuration}}\nPrecio: {{coursePrice}}\n\nResponde: 1) Confirmar 2) Reiniciar 3) Hablar con un asesor",
-    kind: TemplateKind.TEXT,
-  },
-  {
-    key: "course_creation_completed",
-    name: "Curso - completado",
-    body: "Listo. Tu solicitud para crear el curso \"{{courseName}}\" fue registrada correctamente.",
-    kind: TemplateKind.TEXT,
-  },
-  {
-    key: "conversation_cancelled",
-    name: "Conversacion cancelada",
-    body: "Conversacion cancelada. Si deseas comenzar de nuevo, responde MENU.",
-    kind: TemplateKind.TEXT,
-  },
-  {
-    key: "conversation_restarted",
-    name: "Conversacion reiniciada",
-    body: "Reiniciando la conversacion.",
-    kind: TemplateKind.TEXT,
-  },
 ];
 
 const flowDefinitions: SeedFlow[] = [
   {
     key: "welcome",
-    name: "Flujo de bienvenida",
-    description: "Menu principal y enrute a otros pasos.",
-    entryStepKey: "welcome_menu",
-    fallbackTemplateKey: "welcome",
+    name: "Capacitacion inicial",
+    description: "Onboarding y modulo 1 de la capacitacion real.",
+    entryStepKey: "training_welcome_intro",
+    fallbackTemplateKey: "training_welcome_intro",
     rules: [
       { matchType: BotRuleMatchType.EXACT, pattern: "hola", targetFlowKey: "welcome", priority: 1 },
       { matchType: BotRuleMatchType.EXACT, pattern: "hi", targetFlowKey: "welcome", priority: 2 },
       { matchType: BotRuleMatchType.EXACT, pattern: "hello", targetFlowKey: "welcome", priority: 3 },
       { matchType: BotRuleMatchType.EXACT, pattern: "menu", targetFlowKey: "welcome", priority: 4 },
-      { matchType: BotRuleMatchType.CONTAINS, pattern: "informacion", targetFlowKey: "welcome", priority: 5 },
+      { matchType: BotRuleMatchType.EXACT, pattern: "inicio", targetFlowKey: "welcome", priority: 5 },
+      { matchType: BotRuleMatchType.EXACT, pattern: "ayuda", targetFlowKey: "welcome", priority: 6 },
+      { matchType: BotRuleMatchType.CONTAINS, pattern: "si vamos", targetFlowKey: "welcome", priority: 7 },
       { matchType: BotRuleMatchType.FALLBACK, pattern: "*", targetFlowKey: "welcome", priority: 999 },
     ],
     steps: [
       {
-        key: "welcome_menu",
-        name: "Menu principal",
-        templateKey: "welcome",
+        key: "training_welcome_intro",
+        name: "Introduccion capacitacion",
+        templateKey: "training_welcome_intro",
         inputType: FlowStepInputType.CHOICE,
         isTerminal: false,
       },
       {
-        key: "welcome_pricing",
-        name: "Precios desde menu",
-        templateKey: "pricing",
+        key: "training_materials_intro",
+        name: "Materiales e instrucciones",
+        templateKey: "training_materials_intro",
         inputType: FlowStepInputType.CHOICE,
-        isTerminal: true,
+        isTerminal: false,
       },
       {
-        key: "welcome_hours",
-        name: "Horarios desde menu",
-        templateKey: "hours",
+        key: "training_module_1_intro",
+        name: "Introduccion modulo 1",
+        templateKey: "training_module_1_intro",
         inputType: FlowStepInputType.CHOICE,
-        isTerminal: true,
+        isTerminal: false,
       },
       {
-        key: "welcome_location",
-        name: "Ubicacion desde menu",
-        templateKey: "location",
+        key: "training_cafeteria_experience",
+        name: "Experiencia cafeteria",
+        templateKey: "training_cafeteria_experience",
         inputType: FlowStepInputType.CHOICE,
-        isTerminal: true,
+        captureKey: "cafeteriaExperience",
+        isTerminal: false,
       },
       {
-        key: "welcome_handoff",
-        name: "Asesor desde menu",
-        templateKey: "human_handoff",
+        key: "training_eta_audio",
+        name: "Audio ETAs",
+        templateKey: "training_eta_audio",
+        inputType: FlowStepInputType.CHOICE,
+        isTerminal: false,
+      },
+      {
+        key: "training_eta_activity",
+        name: "Actividad ETAs",
+        templateKey: "training_eta_activity",
+        inputType: FlowStepInputType.CHOICE,
+        isTerminal: false,
+      },
+      {
+        key: "training_supply_chain",
+        name: "Cadena de suministro",
+        templateKey: "training_supply_chain",
+        inputType: FlowStepInputType.CHOICE,
+        isTerminal: false,
+      },
+      {
+        key: "training_regulation_intro",
+        name: "Marco normativo",
+        templateKey: "training_regulation_intro",
+        inputType: FlowStepInputType.CHOICE,
+        isTerminal: false,
+      },
+      {
+        key: "training_hygiene_summary",
+        name: "Resumen higiene",
+        templateKey: "training_hygiene_summary",
+        inputType: FlowStepInputType.CHOICE,
+        isTerminal: false,
+      },
+      {
+        key: "training_cleaning_schedule",
+        name: "Calendarizacion limpieza",
+        templateKey: "training_cleaning_schedule",
+        inputType: FlowStepInputType.CHOICE,
+        isTerminal: false,
+      },
+      {
+        key: "training_drying_quiz",
+        name: "Quiz secado",
+        templateKey: "training_drying_quiz",
+        inputType: FlowStepInputType.CHOICE,
+        captureKey: "dryingQuizAnswer",
+        isTerminal: false,
+      },
+      {
+        key: "training_temperature_control",
+        name: "Control temperatura",
+        templateKey: "training_temperature_control",
+        inputType: FlowStepInputType.CHOICE,
+        isTerminal: false,
+      },
+      {
+        key: "training_services_infographic",
+        name: "Infografia servicios",
+        templateKey: "training_services_infographic",
+        inputType: FlowStepInputType.CHOICE,
+        isTerminal: false,
+      },
+      {
+        key: "training_evaluation_intro",
+        name: "Evaluacion modulo 1",
+        templateKey: "training_evaluation_intro",
+        inputType: FlowStepInputType.CHOICE,
+        isTerminal: false,
+      },
+      {
+        key: "training_module_2_intro",
+        name: "Inicio modulo 2",
+        templateKey: "training_module_2_intro",
         inputType: FlowStepInputType.CHOICE,
         isTerminal: true,
       },
     ],
     transitions: [
-      { stepKey: "welcome_menu", matchType: BotRuleMatchType.EXACT, pattern: "1", nextStepKey: "welcome_pricing", priority: 1 },
-      { stepKey: "welcome_menu", matchType: BotRuleMatchType.EXACT, pattern: "2", nextStepKey: "welcome_hours", priority: 2 },
-      { stepKey: "welcome_menu", matchType: BotRuleMatchType.EXACT, pattern: "3", nextStepKey: "welcome_location", priority: 3 },
-      { stepKey: "welcome_menu", matchType: BotRuleMatchType.EXACT, pattern: "4", nextStepKey: "welcome_handoff", priority: 4 },
-      { stepKey: "welcome_menu", matchType: BotRuleMatchType.EXACT, pattern: "5", nextFlowKey: "course_creation", nextStepKey: "course_name", priority: 5 },
-      { stepKey: "welcome_menu", matchType: BotRuleMatchType.FALLBACK, pattern: "*", nextStepKey: "welcome_menu", priority: 999 },
+      { stepKey: "training_welcome_intro", matchType: BotRuleMatchType.EXACT, pattern: "si vamos", nextStepKey: "training_materials_intro", priority: 1 },
+      { stepKey: "training_welcome_intro", matchType: BotRuleMatchType.EXACT, pattern: "si", nextStepKey: "training_materials_intro", priority: 2 },
+      { stepKey: "training_welcome_intro", matchType: BotRuleMatchType.EXACT, pattern: "vamos", nextStepKey: "training_materials_intro", priority: 3 },
+      { stepKey: "training_welcome_intro", matchType: BotRuleMatchType.FALLBACK, pattern: "*", nextStepKey: "training_welcome_intro", priority: 999 },
+      { stepKey: "training_materials_intro", matchType: BotRuleMatchType.EXACT, pattern: "vamos", nextStepKey: "training_module_1_intro", priority: 1 },
+      { stepKey: "training_materials_intro", matchType: BotRuleMatchType.FALLBACK, pattern: "*", nextStepKey: "training_materials_intro", priority: 999 },
+      { stepKey: "training_module_1_intro", matchType: BotRuleMatchType.EXACT, pattern: "vamos", nextStepKey: "training_cafeteria_experience", priority: 1 },
+      { stepKey: "training_module_1_intro", matchType: BotRuleMatchType.FALLBACK, pattern: "*", nextStepKey: "training_module_1_intro", priority: 999 },
+      { stepKey: "training_cafeteria_experience", matchType: BotRuleMatchType.EXACT, pattern: "1", nextStepKey: "training_eta_audio", outputValue: "Menos de 6 meses", priority: 1 },
+      { stepKey: "training_cafeteria_experience", matchType: BotRuleMatchType.CONTAINS, pattern: "menos de 6 meses", nextStepKey: "training_eta_audio", outputValue: "Menos de 6 meses", priority: 2 },
+      { stepKey: "training_cafeteria_experience", matchType: BotRuleMatchType.EXACT, pattern: "2", nextStepKey: "training_eta_audio", outputValue: "Entre 6 meses y 1 año", priority: 3 },
+      { stepKey: "training_cafeteria_experience", matchType: BotRuleMatchType.CONTAINS, pattern: "entre 6 meses y 1 ano", nextStepKey: "training_eta_audio", outputValue: "Entre 6 meses y 1 año", priority: 4 },
+      { stepKey: "training_cafeteria_experience", matchType: BotRuleMatchType.EXACT, pattern: "3", nextStepKey: "training_eta_audio", outputValue: "Entre 1 y 2 años", priority: 5 },
+      { stepKey: "training_cafeteria_experience", matchType: BotRuleMatchType.CONTAINS, pattern: "entre 1 y 2 anos", nextStepKey: "training_eta_audio", outputValue: "Entre 1 y 2 años", priority: 6 },
+      { stepKey: "training_cafeteria_experience", matchType: BotRuleMatchType.EXACT, pattern: "4", nextStepKey: "training_eta_audio", outputValue: "Mas de 2 años", priority: 7 },
+      { stepKey: "training_cafeteria_experience", matchType: BotRuleMatchType.CONTAINS, pattern: "mas de 2 anos", nextStepKey: "training_eta_audio", outputValue: "Mas de 2 años", priority: 8 },
+      { stepKey: "training_cafeteria_experience", matchType: BotRuleMatchType.FALLBACK, pattern: "*", nextStepKey: "training_cafeteria_experience", priority: 999 },
+      { stepKey: "training_eta_audio", matchType: BotRuleMatchType.EXACT, pattern: "vamos", nextStepKey: "training_eta_activity", priority: 1 },
+      { stepKey: "training_eta_audio", matchType: BotRuleMatchType.FALLBACK, pattern: "*", nextStepKey: "training_eta_audio", priority: 999 },
+      { stepKey: "training_eta_activity", matchType: BotRuleMatchType.EXACT, pattern: "continuar", nextStepKey: "training_supply_chain", priority: 1 },
+      { stepKey: "training_eta_activity", matchType: BotRuleMatchType.FALLBACK, pattern: "*", nextStepKey: "training_eta_activity", priority: 999 },
+      { stepKey: "training_supply_chain", matchType: BotRuleMatchType.EXACT, pattern: "continuemos", nextStepKey: "training_regulation_intro", priority: 1 },
+      { stepKey: "training_supply_chain", matchType: BotRuleMatchType.FALLBACK, pattern: "*", nextStepKey: "training_supply_chain", priority: 999 },
+      { stepKey: "training_regulation_intro", matchType: BotRuleMatchType.EXACT, pattern: "continuar", nextStepKey: "training_hygiene_summary", priority: 1 },
+      { stepKey: "training_regulation_intro", matchType: BotRuleMatchType.FALLBACK, pattern: "*", nextStepKey: "training_regulation_intro", priority: 999 },
+      { stepKey: "training_hygiene_summary", matchType: BotRuleMatchType.EXACT, pattern: "vamos", nextStepKey: "training_cleaning_schedule", priority: 1 },
+      { stepKey: "training_hygiene_summary", matchType: BotRuleMatchType.FALLBACK, pattern: "*", nextStepKey: "training_hygiene_summary", priority: 999 },
+      { stepKey: "training_cleaning_schedule", matchType: BotRuleMatchType.EXACT, pattern: "vamos", nextStepKey: "training_drying_quiz", priority: 1 },
+      { stepKey: "training_cleaning_schedule", matchType: BotRuleMatchType.FALLBACK, pattern: "*", nextStepKey: "training_cleaning_schedule", priority: 999 },
+      { stepKey: "training_drying_quiz", matchType: BotRuleMatchType.EXACT, pattern: "verdadero", nextStepKey: "training_temperature_control", outputValue: "Verdadero", priority: 1 },
+      { stepKey: "training_drying_quiz", matchType: BotRuleMatchType.EXACT, pattern: "falso", nextStepKey: "training_temperature_control", outputValue: "Falso", priority: 2 },
+      { stepKey: "training_drying_quiz", matchType: BotRuleMatchType.FALLBACK, pattern: "*", nextStepKey: "training_drying_quiz", priority: 999 },
+      { stepKey: "training_temperature_control", matchType: BotRuleMatchType.EXACT, pattern: "continuar", nextStepKey: "training_services_infographic", priority: 1 },
+      { stepKey: "training_temperature_control", matchType: BotRuleMatchType.FALLBACK, pattern: "*", nextStepKey: "training_temperature_control", priority: 999 },
+      { stepKey: "training_services_infographic", matchType: BotRuleMatchType.EXACT, pattern: "continuar", nextStepKey: "training_evaluation_intro", priority: 1 },
+      { stepKey: "training_services_infographic", matchType: BotRuleMatchType.FALLBACK, pattern: "*", nextStepKey: "training_services_infographic", priority: 999 },
+      { stepKey: "training_evaluation_intro", matchType: BotRuleMatchType.EXACT, pattern: "test", nextStepKey: "training_module_2_intro", priority: 1 },
+      { stepKey: "training_evaluation_intro", matchType: BotRuleMatchType.EXACT, pattern: "vamos", nextStepKey: "training_module_2_intro", priority: 2 },
+      { stepKey: "training_evaluation_intro", matchType: BotRuleMatchType.FALLBACK, pattern: "*", nextStepKey: "training_evaluation_intro", priority: 999 },
     ],
-  },
-  {
-    key: "pricing",
-    name: "Flujo de precios",
-    description: "Consulta directa de precios.",
-    entryStepKey: "pricing_info",
-    fallbackTemplateKey: "pricing",
-    rules: [
-      { matchType: BotRuleMatchType.EXACT, pattern: "1", targetFlowKey: "pricing", priority: 1 },
-      { matchType: BotRuleMatchType.KEYWORD, pattern: "precio", targetFlowKey: "pricing", priority: 2 },
-      { matchType: BotRuleMatchType.KEYWORD, pattern: "precios", targetFlowKey: "pricing", priority: 3 },
-      { matchType: BotRuleMatchType.KEYWORD, pattern: "cotizacion", targetFlowKey: "pricing", priority: 4 },
-      { matchType: BotRuleMatchType.KEYWORD, pattern: "costos", targetFlowKey: "pricing", priority: 5 },
-      { matchType: BotRuleMatchType.CONTAINS, pattern: "cuanto cuesta", targetFlowKey: "pricing", priority: 6 },
-      { matchType: BotRuleMatchType.CONTAINS, pattern: "quiero precios", targetFlowKey: "pricing", priority: 7 },
-    ],
-    steps: [
-      {
-        key: "pricing_info",
-        name: "Informacion de precios",
-        templateKey: "pricing",
-        inputType: FlowStepInputType.CHOICE,
-        isTerminal: true,
-      },
-    ],
-    transitions: [],
-  },
-  {
-    key: "hours",
-    name: "Flujo de horarios",
-    description: "Consulta directa de horarios.",
-    entryStepKey: "hours_info",
-    fallbackTemplateKey: "hours",
-    rules: [
-      { matchType: BotRuleMatchType.EXACT, pattern: "2", targetFlowKey: "hours", priority: 1 },
-      { matchType: BotRuleMatchType.KEYWORD, pattern: "horario", targetFlowKey: "hours", priority: 2 },
-      { matchType: BotRuleMatchType.KEYWORD, pattern: "horarios", targetFlowKey: "hours", priority: 3 },
-      { matchType: BotRuleMatchType.CONTAINS, pattern: "a que hora", targetFlowKey: "hours", priority: 4 },
-      { matchType: BotRuleMatchType.CONTAINS, pattern: "que horario manejan", targetFlowKey: "hours", priority: 5 },
-      { matchType: BotRuleMatchType.CONTAINS, pattern: "quiero horarios", targetFlowKey: "hours", priority: 6 },
-    ],
-    steps: [
-      {
-        key: "hours_info",
-        name: "Informacion de horarios",
-        templateKey: "hours",
-        inputType: FlowStepInputType.CHOICE,
-        isTerminal: true,
-      },
-    ],
-    transitions: [],
-  },
-  {
-    key: "location",
-    name: "Flujo de ubicacion",
-    description: "Consulta directa de ubicacion.",
-    entryStepKey: "location_info",
-    fallbackTemplateKey: "location",
-    rules: [
-      { matchType: BotRuleMatchType.EXACT, pattern: "3", targetFlowKey: "location", priority: 1 },
-      { matchType: BotRuleMatchType.KEYWORD, pattern: "ubicacion", targetFlowKey: "location", priority: 2 },
-      { matchType: BotRuleMatchType.KEYWORD, pattern: "direccion", targetFlowKey: "location", priority: 3 },
-      { matchType: BotRuleMatchType.KEYWORD, pattern: "donde", targetFlowKey: "location", priority: 4 },
-      { matchType: BotRuleMatchType.CONTAINS, pattern: "donde estan", targetFlowKey: "location", priority: 5 },
-      { matchType: BotRuleMatchType.CONTAINS, pattern: "quiero ubicacion", targetFlowKey: "location", priority: 6 },
-    ],
-    steps: [
-      {
-        key: "location_info",
-        name: "Informacion de ubicacion",
-        templateKey: "location",
-        inputType: FlowStepInputType.CHOICE,
-        isTerminal: true,
-      },
-    ],
-    transitions: [],
-  },
-  {
-    key: "human_handoff",
-    name: "Flujo de asesor",
-    description: "Escalacion a humano.",
-    entryStepKey: "handoff_info",
-    fallbackTemplateKey: "human_handoff",
-    rules: [
-      { matchType: BotRuleMatchType.EXACT, pattern: "4", targetFlowKey: "human_handoff", priority: 1 },
-      { matchType: BotRuleMatchType.KEYWORD, pattern: "asesor", targetFlowKey: "human_handoff", priority: 2 },
-      { matchType: BotRuleMatchType.CONTAINS, pattern: "hablar con", targetFlowKey: "human_handoff", priority: 3 },
-      { matchType: BotRuleMatchType.CONTAINS, pattern: "hablar con un asesor", targetFlowKey: "human_handoff", priority: 4 },
-      { matchType: BotRuleMatchType.CONTAINS, pattern: "quiero hablar con alguien", targetFlowKey: "human_handoff", priority: 5 },
-      { matchType: BotRuleMatchType.CONTAINS, pattern: "atencion humana", targetFlowKey: "human_handoff", priority: 6 },
-      { matchType: BotRuleMatchType.KEYWORD, pattern: "humano", targetFlowKey: "human_handoff", priority: 7 },
-    ],
-    steps: [
-      {
-        key: "handoff_info",
-        name: "Informacion de asesor",
-        templateKey: "human_handoff",
-        inputType: FlowStepInputType.CHOICE,
-        isTerminal: true,
-      },
-    ],
-    transitions: [],
   },
   {
     key: "appointment_reminder",
@@ -357,92 +377,6 @@ const flowDefinitions: SeedFlow[] = [
       },
     ],
     transitions: [],
-  },
-  {
-    key: "course_creation",
-    name: "Creacion de curso",
-    description: "Flujo multi paso para construir un curso.",
-    entryStepKey: "course_name",
-    fallbackTemplateKey: "course_creation_intro",
-    rules: [
-      { matchType: BotRuleMatchType.CONTAINS, pattern: "crear curso", targetFlowKey: "course_creation", priority: 1 },
-      { matchType: BotRuleMatchType.CONTAINS, pattern: "crear un curso", targetFlowKey: "course_creation", priority: 2 },
-      { matchType: BotRuleMatchType.CONTAINS, pattern: "quiero crear un curso", targetFlowKey: "course_creation", priority: 3 },
-      { matchType: BotRuleMatchType.CONTAINS, pattern: "crear mi curso", targetFlowKey: "course_creation", priority: 4 },
-    ],
-    steps: [
-      {
-        key: "course_name",
-        name: "Nombre del curso",
-        templateKey: "course_creation_intro",
-        inputType: FlowStepInputType.FREE_TEXT,
-        captureKey: "courseName",
-        isTerminal: false,
-      },
-      {
-        key: "course_category",
-        name: "Categoria del curso",
-        templateKey: "course_creation_category",
-        inputType: FlowStepInputType.CHOICE,
-        captureKey: "courseCategory",
-        isTerminal: false,
-      },
-      {
-        key: "course_level",
-        name: "Nivel del curso",
-        templateKey: "course_creation_level",
-        inputType: FlowStepInputType.CHOICE,
-        captureKey: "courseLevel",
-        isTerminal: false,
-      },
-      {
-        key: "course_duration",
-        name: "Duracion del curso",
-        templateKey: "course_creation_duration",
-        inputType: FlowStepInputType.FREE_TEXT,
-        captureKey: "courseDuration",
-        isTerminal: false,
-      },
-      {
-        key: "course_price",
-        name: "Precio del curso",
-        templateKey: "course_creation_price",
-        inputType: FlowStepInputType.FREE_TEXT,
-        captureKey: "coursePrice",
-        isTerminal: false,
-      },
-      {
-        key: "course_confirm",
-        name: "Confirmacion del curso",
-        templateKey: "course_creation_confirm",
-        inputType: FlowStepInputType.CHOICE,
-        isTerminal: false,
-      },
-      {
-        key: "course_completed",
-        name: "Curso completado",
-        templateKey: "course_creation_completed",
-        inputType: FlowStepInputType.CHOICE,
-        isTerminal: true,
-      },
-    ],
-    transitions: [
-      { stepKey: "course_name", matchType: BotRuleMatchType.FALLBACK, pattern: "*", nextStepKey: "course_category", priority: 1 },
-      { stepKey: "course_category", matchType: BotRuleMatchType.EXACT, pattern: "1", nextStepKey: "course_level", outputValue: "Programacion", priority: 1 },
-      { stepKey: "course_category", matchType: BotRuleMatchType.EXACT, pattern: "2", nextStepKey: "course_level", outputValue: "Diseno", priority: 2 },
-      { stepKey: "course_category", matchType: BotRuleMatchType.EXACT, pattern: "3", nextStepKey: "course_level", outputValue: "Marketing", priority: 3 },
-      { stepKey: "course_category", matchType: BotRuleMatchType.FALLBACK, pattern: "*", nextStepKey: "course_category", priority: 999 },
-      { stepKey: "course_level", matchType: BotRuleMatchType.EXACT, pattern: "1", nextStepKey: "course_duration", outputValue: "Basico", priority: 1 },
-      { stepKey: "course_level", matchType: BotRuleMatchType.EXACT, pattern: "2", nextStepKey: "course_duration", outputValue: "Intermedio", priority: 2 },
-      { stepKey: "course_level", matchType: BotRuleMatchType.EXACT, pattern: "3", nextStepKey: "course_duration", outputValue: "Avanzado", priority: 3 },
-      { stepKey: "course_level", matchType: BotRuleMatchType.FALLBACK, pattern: "*", nextStepKey: "course_level", priority: 999 },
-      { stepKey: "course_duration", matchType: BotRuleMatchType.FALLBACK, pattern: "*", nextStepKey: "course_price", priority: 1 },
-      { stepKey: "course_price", matchType: BotRuleMatchType.FALLBACK, pattern: "*", nextStepKey: "course_confirm", priority: 1 },
-      { stepKey: "course_confirm", matchType: BotRuleMatchType.EXACT, pattern: "1", nextStepKey: "course_completed", priority: 1 },
-      { stepKey: "course_confirm", matchType: BotRuleMatchType.EXACT, pattern: "2", nextStepKey: "course_name", priority: 2 },
-      { stepKey: "course_confirm", matchType: BotRuleMatchType.EXACT, pattern: "3", nextFlowKey: "human_handoff", nextStepKey: "handoff_info", priority: 3 },
-      { stepKey: "course_confirm", matchType: BotRuleMatchType.FALLBACK, pattern: "*", nextStepKey: "course_confirm", priority: 999 },
-    ],
   },
 ];
 
@@ -566,7 +500,6 @@ async function main() {
     select: {
       id: true,
       key: true,
-      flowId: true,
       flow: {
         select: {
           key: true,
@@ -581,21 +514,18 @@ async function main() {
   }
 
   for (const flow of flowDefinitions) {
-    const flowId = flowIdByKey.get(flow.key);
-
-    if (!flowId || flow.transitions.length === 0) {
+    if (flow.transitions.length === 0) {
       continue;
     }
 
     await prisma.botFlowTransition.createMany({
       data: flow.transitions.map((transition) => {
         const sourceStepId = stepIdByFlowAndKey.get(`${flow.key}:${transition.stepKey}`);
-        const nextFlowKey = transition.nextFlowKey ?? flow.key;
-        const nextStepId = stepIdByFlowAndKey.get(`${nextFlowKey}:${transition.nextStepKey}`);
+        const nextStepId = stepIdByFlowAndKey.get(`${flow.key}:${transition.nextStepKey}`);
 
         if (!sourceStepId || !nextStepId) {
           throw new Error(
-            `Missing step mapping for transition ${flow.key}:${transition.stepKey} -> ${nextFlowKey}:${transition.nextStepKey}`,
+            `Missing step mapping for transition ${flow.key}:${transition.stepKey} -> ${flow.key}:${transition.nextStepKey}`,
           );
         }
 

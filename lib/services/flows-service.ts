@@ -100,6 +100,7 @@ export async function sendTemplateByKey(input: {
     const providerMessage = await sendWhatsAppTextMessage({
       to: input.contactPhone,
       body,
+      mediaUrl: template.mediaUrl ?? undefined,
     });
 
     const persisted = await storeOutboundMessage({
