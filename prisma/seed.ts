@@ -145,6 +145,18 @@ const templates = [
     body: "Listo. Tu solicitud para crear el curso \"{{courseName}}\" fue registrada correctamente.",
     kind: TemplateKind.TEXT,
   },
+  {
+    key: "conversation_cancelled",
+    name: "Conversacion cancelada",
+    body: "Conversacion cancelada. Si deseas comenzar de nuevo, responde MENU.",
+    kind: TemplateKind.TEXT,
+  },
+  {
+    key: "conversation_restarted",
+    name: "Conversacion reiniciada",
+    body: "Reiniciando la conversacion.",
+    kind: TemplateKind.TEXT,
+  },
 ];
 
 const flowDefinitions: SeedFlow[] = [

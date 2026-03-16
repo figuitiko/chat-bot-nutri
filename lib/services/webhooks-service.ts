@@ -3,11 +3,14 @@ import type { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { AppError } from "@/lib/http";
+import { normalizeText } from "@/lib/bot/state-machine";
 import { parseWhatsAppAddress } from "@/lib/phone";
 import { resolveInboundResponse } from "@/lib/bot/executor";
 import { upsertContactByPhone } from "@/lib/services/contacts-service";
 import {
+  closeOpenConversations,
   progressConversation,
+  restartConversation,
   sendTemplateByKey,
   startFlowConversation,
 } from "@/lib/services/flows-service";
@@ -64,6 +67,24 @@ async function getActiveConversation(contactId: string) {
   });
 }
 
+function resolveGlobalCommand(text: string) {
+  const normalized = normalizeText(text);
+
+  if (["menu", "inicio", "help", "ayuda"].includes(normalized)) {
+    return "menu" as const;
+  }
+
+  if (["reiniciar", "restart", "reset"].includes(normalized)) {
+    return "restart" as const;
+  }
+
+  if (["cancelar", "cancel", "salir"].includes(normalized)) {
+    return "cancel" as const;
+  }
+
+  return null;
+}
+
 export async function processInboundWebhook(payload: Record<string, string | undefined>) {
   const providerMessageSid = payload.MessageSid ?? payload.SmsSid;
 
@@ -100,8 +121,62 @@ export async function processInboundWebhook(payload: Record<string, string | und
   let matchedFlowKey: string | null = null;
   let matchedTemplateKey: string | null = null;
   let replied = false;
+  const globalCommand = resolveGlobalCommand(payload.Body ?? "");
 
-  if (activeConversation) {
+  if (globalCommand === "menu") {
+    await closeOpenConversations(contact.id);
+
+    const started = await startFlowConversation({
+      contactId: contact.id,
+      contactPhone,
+      flowKey: "welcome",
+    });
+
+    conversationId = started.conversation.id;
+    matchedFlowKey = started.flow.key;
+    matchedTemplateKey = started.step.templateKey;
+    responseMessageSid = started.providerMessageSid;
+    replied = true;
+  } else if (globalCommand === "restart" && activeConversation) {
+    const restarted = await restartConversation({
+      conversationId: activeConversation.id,
+      contactPhone,
+    });
+
+    conversationId = restarted.conversation.id;
+    matchedFlowKey = restarted.flow.key;
+    matchedTemplateKey = restarted.step.templateKey;
+    responseMessageSid = restarted.providerMessageSid;
+    replied = true;
+  } else if (globalCommand === "restart") {
+    const started = await startFlowConversation({
+      contactId: contact.id,
+      contactPhone,
+      flowKey: "welcome",
+    });
+
+    conversationId = started.conversation.id;
+    matchedFlowKey = started.flow.key;
+    matchedTemplateKey = started.step.templateKey;
+    responseMessageSid = started.providerMessageSid;
+    replied = true;
+  } else if (globalCommand === "cancel") {
+    await closeOpenConversations(contact.id);
+
+    const response = await sendTemplateByKey({
+      contactId: contact.id,
+      contactPhone,
+      templateKey: "conversation_cancelled",
+      conversationId,
+    });
+
+    matchedTemplateKey = "conversation_cancelled";
+    responseMessageSid = response.providerMessage.sid;
+    replied = true;
+    conversationId = null;
+  }
+
+  if (!replied && activeConversation) {
     const progressed = await progressConversation({
       conversationId: activeConversation.id,
       text: payload.Body ?? "",

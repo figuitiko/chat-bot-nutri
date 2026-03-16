@@ -251,24 +251,63 @@ export async function progressConversation(input: {
   const nextStatus = nextStep.isTerminal ? "CLOSED" : "OPEN";
   const nextCurrentStepId = nextStep.isTerminal ? null : nextStep.id;
   const nextFlowId = nextStep.flowId;
+  const isCrossFlowTransition = conversation.flowId && conversation.flowId !== nextFlowId;
 
-  const updatedConversation = await db.conversation.update({
-    where: { id: conversation.id },
-    data: {
-      flowId: nextFlowId,
-      currentStepId: nextCurrentStepId,
-      contextData,
-      status: nextStatus,
-      lastMessageAt: new Date(),
-    },
-  });
+  let updatedConversation;
+
+  if (isCrossFlowTransition) {
+    const targetConversation = await db.conversation.upsert({
+      where: {
+        contactId_flowId: {
+          contactId: conversation.contactId,
+          flowId: nextFlowId,
+        },
+      },
+      create: {
+        contactId: conversation.contactId,
+        flowId: nextFlowId,
+        currentStepId: nextCurrentStepId,
+        contextData,
+        status: nextStatus,
+        lastMessageAt: new Date(),
+      },
+      update: {
+        currentStepId: nextCurrentStepId,
+        contextData,
+        status: nextStatus,
+        lastMessageAt: new Date(),
+      },
+    });
+
+    await db.conversation.update({
+      where: { id: conversation.id },
+      data: {
+        currentStepId: null,
+        status: "CLOSED",
+        lastMessageAt: new Date(),
+      },
+    });
+
+    updatedConversation = targetConversation;
+  } else {
+    updatedConversation = await db.conversation.update({
+      where: { id: conversation.id },
+      data: {
+        flowId: nextFlowId,
+        currentStepId: nextCurrentStepId,
+        contextData,
+        status: nextStatus,
+        lastMessageAt: new Date(),
+      },
+    });
+  }
 
   const result = await sendTemplateByKey({
     contactId: conversation.contactId,
     contactPhone: input.contactPhone,
     templateKey: nextStep.templateKey,
     variables: readConversationContext(contextData),
-    conversationId: conversation.id,
+    conversationId: updatedConversation.id,
   });
 
   await db.contact.update({
@@ -311,4 +350,42 @@ export async function executeFlow(input: {
     message: result.message,
     providerMessageSid: result.providerMessageSid,
   };
+}
+
+export async function closeOpenConversations(contactId: string) {
+  await db.conversation.updateMany({
+    where: {
+      contactId,
+      status: "OPEN",
+    },
+    data: {
+      status: "CLOSED",
+      currentStepId: null,
+      lastMessageAt: new Date(),
+    },
+  });
+}
+
+export async function restartConversation(input: {
+  conversationId: string;
+  contactPhone: string;
+}) {
+  const conversation = await db.conversation.findUnique({
+    where: {
+      id: input.conversationId,
+    },
+    include: {
+      flow: true,
+    },
+  });
+
+  if (!conversation?.flow) {
+    throw new AppError("CONVERSATION_NOT_FOUND", "Conversation flow was not found.", 404);
+  }
+
+  return startFlowConversation({
+    contactId: conversation.contactId,
+    contactPhone: input.contactPhone,
+    flowKey: conversation.flow.key,
+  });
 }
