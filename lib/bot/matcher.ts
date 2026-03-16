@@ -69,6 +69,7 @@ export async function matchBotRule(input: {
         flowKey: flow.key,
         ruleId: directMatch.id,
         responseTemplateKey: directMatch.responseTemplateKey,
+        targetFlowKey: directMatch.targetFlowKey,
         matchType: directMatch.matchType,
       };
     }
@@ -80,6 +81,7 @@ export async function matchBotRule(input: {
         flowKey: flow.key,
         ruleId: fallback.id,
         responseTemplateKey: fallback.responseTemplateKey,
+        targetFlowKey: fallback.targetFlowKey,
         matchType: fallback.matchType,
       };
     }

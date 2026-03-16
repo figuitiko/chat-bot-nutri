@@ -62,6 +62,11 @@ enum WebhookSource {
   TWILIO_STATUS
 }
 
+enum FlowStepInputType {
+  CHOICE
+  FREE_TEXT
+}
+
 model Contact {
   id             String         @id @default(cuid())
   phone          String         @unique
@@ -84,11 +89,13 @@ model BotFlow {
   name                String
   description         String?
   isActive            Boolean        @default(true)
+  entryStepKey        String?
   fallbackTemplateKey String?
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
   conversations       Conversation[]
   rules               BotRule[]
+  steps               BotFlowStep[]
 }
 
 model BotRule {
@@ -96,7 +103,8 @@ model BotRule {
   flowId              String
   matchType           BotRuleMatchType
   pattern             String
-  responseTemplateKey String
+  responseTemplateKey String?
+  targetFlowKey       String?
   priority            Int              @default(100)
   isActive            Boolean          @default(true)
   createdAt           DateTime         @default(now())
@@ -104,6 +112,44 @@ model BotRule {
   flow                BotFlow          @relation(fields: [flowId], references: [id], onDelete: Cascade)
 
   @@index([flowId, priority])
+}
+
+model BotFlowStep {
+  id                  String                          @id @default(cuid())
+  flowId              String
+  key                 String
+  name                String
+  templateKey         String
+  inputType           FlowStepInputType              @default(CHOICE)
+  captureKey          String?
+  isTerminal          Boolean                         @default(false)
+  isActive            Boolean                         @default(true)
+  createdAt           DateTime                        @default(now())
+  updatedAt           DateTime                        @updatedAt
+  flow                BotFlow                         @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  transitions         BotFlowTransition[]             @relation("TransitionSource")
+  incomingTransitions BotFlowTransition[]             @relation("TransitionTarget")
+  conversations       Conversation[]                  @relation("ConversationCurrentStep")
+
+  @@unique([flowId, key])
+  @@index([flowId])
+}
+
+model BotFlowTransition {
+  id          String           @id @default(cuid())
+  stepId       String
+  nextStepId   String?
+  matchType    BotRuleMatchType
+  pattern      String
+  outputValue  String?
+  priority     Int              @default(100)
+  isActive     Boolean          @default(true)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  step         BotFlowStep      @relation("TransitionSource", fields: [stepId], references: [id], onDelete: Cascade)
+  nextStep     BotFlowStep?     @relation("TransitionTarget", fields: [nextStepId], references: [id], onDelete: SetNull)
+
+  @@index([stepId, priority])
 }
 
 model MessageTemplate {
@@ -124,12 +170,15 @@ model Conversation {
   id            String             @id @default(cuid())
   contactId     String
   flowId        String?
+  currentStepId String?
+  contextData   Json?
   status        ConversationStatus @default(OPEN)
   lastMessageAt DateTime           @default(now())
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
   contact       Contact            @relation(fields: [contactId], references: [id], onDelete: Cascade)
   flow          BotFlow?           @relation(fields: [flowId], references: [id], onDelete: SetNull)
+  currentStep   BotFlowStep?       @relation("ConversationCurrentStep", fields: [currentStepId], references: [id], onDelete: SetNull)
   messages      Message[]
 
   @@unique([contactId, flowId])

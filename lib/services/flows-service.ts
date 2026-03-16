@@ -4,7 +4,13 @@ import { db } from "@/lib/db";
 import { AppError } from "@/lib/http";
 import { logger } from "@/lib/logger";
 import { normalizePhone } from "@/lib/phone";
-import { renderTemplateBody, ensureTemplateBody } from "@/lib/bot/responses";
+import { ensureTemplateBody, renderTemplateBody } from "@/lib/bot/responses";
+import {
+  matchStepTransition,
+  mergeConversationContext,
+  readConversationContext,
+  resolveCapturedValue,
+} from "@/lib/bot/state-machine";
 import { upsertContactByPhone } from "@/lib/services/contacts-service";
 import { storeOutboundMessage } from "@/lib/services/messages-service";
 import { sendWhatsAppTemplateMessage, sendWhatsAppTextMessage } from "@/lib/twilio";
@@ -22,6 +28,33 @@ async function getActiveTemplate(templateKey: string) {
   }
 
   return template;
+}
+
+async function getFlowWithEntryStep(flowKey: string) {
+  const flow = await db.botFlow.findFirst({
+    where: {
+      key: flowKey,
+      isActive: true,
+    },
+    include: {
+      steps: {
+        where: { isActive: true },
+        orderBy: { createdAt: "asc" },
+      },
+    },
+  });
+
+  if (!flow) {
+    throw new AppError("FLOW_NOT_FOUND", `Flow "${flowKey}" was not found or is inactive.`, 404);
+  }
+
+  const entryStep = flow.steps.find((step) => step.key === flow.entryStepKey) ?? flow.steps[0];
+
+  if (!entryStep) {
+    throw new AppError("FLOW_NOT_EXECUTABLE", `Flow "${flowKey}" does not have an active entry step.`, 422);
+  }
+
+  return { flow, entryStep };
 }
 
 export async function sendTemplateByKey(input: {
@@ -104,81 +137,178 @@ export async function sendTemplateByKey(input: {
   }
 }
 
-export async function executeFlow(input: {
+export async function startFlowConversation(input: {
+  contactId: string;
   contactPhone: string;
   flowKey: string;
   variables?: Record<string, string>;
 }) {
-  const normalizedPhone = normalizePhone(input.contactPhone);
-
-  const [contact, flow] = await Promise.all([
-    upsertContactByPhone({ phone: normalizedPhone }),
-    db.botFlow.findFirst({
-      where: {
-        key: input.flowKey,
-        isActive: true,
-      },
-    }),
-  ]);
-
-  if (!flow) {
-    throw new AppError("FLOW_NOT_FOUND", `Flow "${input.flowKey}" was not found or is inactive.`, 404);
-  }
-
-  if (!flow.fallbackTemplateKey) {
-    throw new AppError(
-      "FLOW_NOT_EXECUTABLE",
-      `Flow "${input.flowKey}" does not have a fallback template configured.`,
-      422,
-    );
-  }
+  const { flow, entryStep } = await getFlowWithEntryStep(input.flowKey);
+  const contextData = mergeConversationContext(null, input.variables ?? {});
+  const initialStatus = entryStep.isTerminal ? "CLOSED" : "OPEN";
+  const initialCurrentStepId = entryStep.isTerminal ? null : entryStep.id;
 
   const conversation = await db.conversation.upsert({
     where: {
       contactId_flowId: {
-        contactId: contact.id,
+        contactId: input.contactId,
         flowId: flow.id,
       },
     },
     create: {
-      contactId: contact.id,
+      contactId: input.contactId,
       flowId: flow.id,
-      status: "OPEN",
+      currentStepId: initialCurrentStepId,
+      contextData,
+      status: initialStatus,
       lastMessageAt: new Date(),
     },
     update: {
-      status: "OPEN",
+      currentStepId: initialCurrentStepId,
+      contextData,
+      status: initialStatus,
       lastMessageAt: new Date(),
     },
   });
 
   const result = await sendTemplateByKey({
-    contactId: contact.id,
-    contactPhone: normalizedPhone,
-    templateKey: flow.fallbackTemplateKey,
-    variables: input.variables,
+    contactId: input.contactId,
+    contactPhone: input.contactPhone,
+    templateKey: entryStep.templateKey,
+    variables: readConversationContext(contextData),
     conversationId: conversation.id,
   });
 
   await Promise.all([
     db.contact.update({
-      where: { id: contact.id },
+      where: { id: input.contactId },
       data: {
         lastOutboundAt: new Date(),
       },
     }),
     db.conversation.update({
       where: { id: conversation.id },
-      data: { lastMessageAt: new Date() },
+      data: {
+        lastMessageAt: new Date(),
+      },
     }),
   ]);
 
   return {
-    contact,
-    conversation,
+    conversation: {
+      ...conversation,
+      currentStepId: initialCurrentStepId,
+      contextData,
+      status: initialStatus,
+    },
     flow,
+    step: entryStep,
     template: result.template,
     message: result.persisted,
     providerMessageSid: result.providerMessage.sid,
+  };
+}
+
+export async function progressConversation(input: {
+  conversationId: string;
+  text: string;
+  contactPhone: string;
+}) {
+  const conversation = await db.conversation.findUnique({
+    where: { id: input.conversationId },
+    include: {
+      contact: true,
+      currentStep: {
+        include: {
+          flow: true,
+          transitions: {
+            where: { isActive: true },
+            orderBy: { priority: "asc" },
+            include: {
+              nextStep: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!conversation || !conversation.currentStep) {
+    return null;
+  }
+
+  const transition = matchStepTransition(conversation.currentStep.transitions, input.text);
+
+  if (!transition || !transition.nextStep) {
+    return null;
+  }
+
+  const contextData = mergeConversationContext(
+    conversation.contextData,
+    resolveCapturedValue(conversation.currentStep, transition, input.text),
+  );
+  const nextStep = transition.nextStep;
+  const nextStatus = nextStep.isTerminal ? "CLOSED" : "OPEN";
+  const nextCurrentStepId = nextStep.isTerminal ? null : nextStep.id;
+  const nextFlowId = nextStep.flowId;
+
+  const updatedConversation = await db.conversation.update({
+    where: { id: conversation.id },
+    data: {
+      flowId: nextFlowId,
+      currentStepId: nextCurrentStepId,
+      contextData,
+      status: nextStatus,
+      lastMessageAt: new Date(),
+    },
+  });
+
+  const result = await sendTemplateByKey({
+    contactId: conversation.contactId,
+    contactPhone: input.contactPhone,
+    templateKey: nextStep.templateKey,
+    variables: readConversationContext(contextData),
+    conversationId: conversation.id,
+  });
+
+  await db.contact.update({
+    where: { id: conversation.contactId },
+    data: {
+      lastOutboundAt: new Date(),
+    },
+  });
+
+  return {
+    conversation: updatedConversation,
+    previousStep: conversation.currentStep,
+    nextStep,
+    template: result.template,
+    message: result.persisted,
+    providerMessageSid: result.providerMessage.sid,
+  };
+}
+
+export async function executeFlow(input: {
+  contactPhone: string;
+  flowKey: string;
+  variables?: Record<string, string>;
+}) {
+  const normalizedPhone = normalizePhone(input.contactPhone);
+  const contact = await upsertContactByPhone({ phone: normalizedPhone });
+  const result = await startFlowConversation({
+    contactId: contact.id,
+    contactPhone: normalizedPhone,
+    flowKey: input.flowKey,
+    variables: input.variables,
+  });
+
+  return {
+    contact,
+    conversation: result.conversation,
+    flow: result.flow,
+    step: result.step,
+    template: result.template,
+    message: result.message,
+    providerMessageSid: result.providerMessageSid,
   };
 }

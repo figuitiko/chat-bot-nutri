@@ -6,7 +6,11 @@ import { AppError } from "@/lib/http";
 import { parseWhatsAppAddress } from "@/lib/phone";
 import { resolveInboundResponse } from "@/lib/bot/executor";
 import { upsertContactByPhone } from "@/lib/services/contacts-service";
-import { sendTemplateByKey } from "@/lib/services/flows-service";
+import {
+  progressConversation,
+  sendTemplateByKey,
+  startFlowConversation,
+} from "@/lib/services/flows-service";
 import { mapTwilioStatus, storeInboundMessage } from "@/lib/services/messages-service";
 
 async function upsertWebhookEvent(input: {
@@ -45,51 +49,17 @@ async function upsertWebhookEvent(input: {
   });
 }
 
-async function getConversation(contactId: string, flowId: string | null) {
-  if (flowId) {
-    return db.conversation.upsert({
-      where: {
-        contactId_flowId: {
-          contactId,
-          flowId,
-        },
-      },
-      create: {
-        contactId,
-        flowId,
-        status: "OPEN",
-        lastMessageAt: new Date(),
-      },
-      update: {
-        status: "OPEN",
-        lastMessageAt: new Date(),
-      },
-    });
-  }
-
-  const existing = await db.conversation.findFirst({
+async function getActiveConversation(contactId: string) {
+  return db.conversation.findFirst({
     where: {
       contactId,
-      flowId: null,
-    },
-  });
-
-  if (existing) {
-    return db.conversation.update({
-      where: { id: existing.id },
-      data: {
-        status: "ESCALATED",
-        lastMessageAt: new Date(),
+      status: "OPEN",
+      currentStepId: {
+        not: null,
       },
-    });
-  }
-
-  return db.conversation.create({
-    data: {
-      contactId,
-      flowId: null,
-      status: "ESCALATED",
-      lastMessageAt: new Date(),
+    },
+    orderBy: {
+      updatedAt: "desc",
     },
   });
 }
@@ -124,36 +94,70 @@ export async function processInboundWebhook(payload: Record<string, string | und
     profileName: payload.ProfileName,
   });
 
-  const match = await resolveInboundResponse(payload.Body ?? "");
-  const flow = match
-    ? await db.botFlow.findUnique({
-        where: { key: match.flowKey },
-      })
-    : null;
+  const activeConversation = await getActiveConversation(contact.id);
+  let responseMessageSid: string | null = null;
+  let conversationId: string | null = activeConversation?.id ?? null;
+  let matchedFlowKey: string | null = null;
+  let matchedTemplateKey: string | null = null;
+  let replied = false;
 
-  const conversation = await getConversation(contact.id, flow?.id ?? null);
+  if (activeConversation) {
+    const progressed = await progressConversation({
+      conversationId: activeConversation.id,
+      text: payload.Body ?? "",
+      contactPhone,
+    });
+
+    if (progressed) {
+      conversationId = progressed.conversation.id;
+      matchedFlowKey = progressed.nextStep.flowId;
+      matchedTemplateKey = progressed.nextStep.templateKey;
+      responseMessageSid = progressed.providerMessageSid;
+      replied = true;
+    }
+  }
+
+  if (!replied) {
+    const match = await resolveInboundResponse(payload.Body ?? "");
+
+    if (match?.targetFlowKey) {
+      const started = await startFlowConversation({
+        contactId: contact.id,
+        contactPhone,
+        flowKey: match.targetFlowKey,
+      });
+
+      conversationId = started.conversation.id;
+      matchedFlowKey = started.flow.key;
+      matchedTemplateKey = started.step.templateKey;
+      responseMessageSid = started.providerMessageSid;
+      replied = true;
+    } else if (match?.responseTemplateKey) {
+      const response = await sendTemplateByKey({
+        contactId: contact.id,
+        contactPhone,
+        templateKey: match.responseTemplateKey,
+        conversationId,
+      });
+
+      matchedFlowKey = match.flowKey;
+      matchedTemplateKey = match.responseTemplateKey;
+      responseMessageSid = response.providerMessage.sid;
+      replied = true;
+    }
+  }
 
   const inboundMessage = await storeInboundMessage({
     body: payload.Body ?? "",
     contactId: contact.id,
-    conversationId: conversation.id,
+    conversationId,
     providerMessageSid,
     rawPayload: payload,
   });
 
-  let responseMessageSid: string | null = null;
-
-  if (match) {
-    const response = await sendTemplateByKey({
-      contactId: contact.id,
-      contactPhone,
-      templateKey: match.responseTemplateKey,
-      conversationId: conversation.id,
-    });
-    responseMessageSid = response.providerMessage.sid;
-  } else {
+  if (!replied && conversationId) {
     await db.conversation.update({
-      where: { id: conversation.id },
+      where: { id: conversationId },
       data: {
         status: "ESCALATED",
       },
@@ -165,7 +169,7 @@ export async function processInboundWebhook(payload: Record<string, string | und
       where: { id: contact.id },
       data: {
         lastInboundAt: new Date(),
-        ...(match ? { lastOutboundAt: new Date() } : {}),
+        ...(replied ? { lastOutboundAt: new Date() } : {}),
       },
     }),
     eventId
@@ -186,11 +190,11 @@ export async function processInboundWebhook(payload: Record<string, string | und
 
   return {
     duplicate: false,
-    replied: Boolean(match),
+    replied,
     contactId: contact.id,
     inboundMessageId: inboundMessage.id,
-    matchedFlowKey: match?.flowKey ?? null,
-    matchedTemplateKey: match?.responseTemplateKey ?? null,
+    matchedFlowKey,
+    matchedTemplateKey,
     responseMessageSid,
   };
 }
