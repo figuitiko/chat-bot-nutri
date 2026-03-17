@@ -5,6 +5,14 @@ import { normalizeWhatsAppAddress } from "@/lib/phone";
 
 const client = twilio(env.TWILIO_ACCOUNT_SID, env.TWILIO_AUTH_TOKEN);
 
+export type WhatsAppInteractiveMode = "quick-reply" | "list-picker";
+
+export type WhatsAppInteractiveOption = {
+  id: string;
+  title: string;
+  description?: string;
+};
+
 export async function sendWhatsAppTextMessage(input: {
   to: string;
   body: string;
@@ -35,6 +43,43 @@ export async function sendWhatsAppTemplateMessage(input: {
     contentSid: input.contentSid,
     contentVariables: input.variables ? JSON.stringify(input.variables) : undefined,
     statusCallback: input.statusCallbackUrl ?? env.TWILIO_STATUS_CALLBACK_URL,
+  });
+}
+
+export async function createWhatsAppInteractiveTemplate(input: {
+  friendlyName: string;
+  language: string;
+  body: string;
+  mode: WhatsAppInteractiveMode;
+  options: WhatsAppInteractiveOption[];
+}) {
+  const types =
+    input.mode === "list-picker"
+      ? {
+          "twilio/list-picker": {
+            body: input.body,
+            button: "OPCIONES",
+            items: input.options.map((option) => ({
+              id: option.id,
+              item: option.title,
+              description: option.description,
+            })),
+          },
+        }
+      : {
+          "twilio/quick-reply": {
+            body: input.body,
+            actions: input.options.map((option) => ({
+              id: option.id,
+              title: option.title,
+            })),
+          },
+        };
+
+  return client.content.v1.contents.create({
+    friendlyName: input.friendlyName,
+    language: input.language,
+    types: types as never,
   });
 }
 

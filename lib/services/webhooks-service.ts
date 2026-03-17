@@ -85,6 +85,10 @@ function resolveGlobalCommand(text: string) {
   return null;
 }
 
+function resolveInboundInput(payload: Record<string, string | undefined>) {
+  return payload.ButtonPayload?.trim() || payload.Body?.trim() || "";
+}
+
 export async function processInboundWebhook(payload: Record<string, string | undefined>) {
   const providerMessageSid = payload.MessageSid ?? payload.SmsSid;
 
@@ -121,7 +125,8 @@ export async function processInboundWebhook(payload: Record<string, string | und
   let matchedFlowKey: string | null = null;
   let matchedTemplateKey: string | null = null;
   let replied = false;
-  const globalCommand = resolveGlobalCommand(payload.Body ?? "");
+  const inboundInput = resolveInboundInput(payload);
+  const globalCommand = resolveGlobalCommand(inboundInput);
 
   if (globalCommand === "menu") {
     await closeOpenConversations(contact.id);
@@ -179,7 +184,7 @@ export async function processInboundWebhook(payload: Record<string, string | und
   if (!replied && activeConversation) {
     const progressed = await progressConversation({
       conversationId: activeConversation.id,
-      text: payload.Body ?? "",
+      text: inboundInput,
       contactPhone,
     });
 
@@ -193,7 +198,7 @@ export async function processInboundWebhook(payload: Record<string, string | und
   }
 
   if (!replied) {
-    const match = await resolveInboundResponse(payload.Body ?? "");
+    const match = await resolveInboundResponse(inboundInput);
 
     if (match?.targetFlowKey) {
       const started = await startFlowConversation({

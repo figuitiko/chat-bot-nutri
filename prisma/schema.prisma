@@ -67,6 +67,13 @@ enum FlowStepInputType {
   FREE_TEXT
 }
 
+enum FlowStepRenderMode {
+  TEXT
+  AUTO
+  QUICK_REPLY
+  LIST_PICKER
+}
+
 model Contact {
   id             String         @id @default(cuid())
   phone          String         @unique
@@ -121,6 +128,7 @@ model BotFlowStep {
   name                String
   templateKey         String
   inputType           FlowStepInputType              @default(CHOICE)
+  renderMode          FlowStepRenderMode             @default(TEXT)
   captureKey          String?
   isTerminal          Boolean                         @default(false)
   isActive            Boolean                         @default(true)

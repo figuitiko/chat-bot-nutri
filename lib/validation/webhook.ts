@@ -2,6 +2,8 @@ import { z } from "zod";
 
 export const twilioInboundWebhookSchema = z.object({
   Body: z.string().default(""),
+  ButtonPayload: z.string().optional(),
+  ButtonText: z.string().optional(),
   From: z.string().min(1),
   To: z.string().min(1),
   WaId: z.string().optional(),

@@ -3,6 +3,7 @@ import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import {
   BotRuleMatchType,
+  FlowStepRenderMode,
   FlowStepInputType,
   PrismaClient,
   TemplateKind,
@@ -35,6 +36,7 @@ type SeedStep = {
   name: string;
   templateKey: string;
   inputType: FlowStepInputType;
+  renderMode?: FlowStepRenderMode;
   captureKey?: string;
   isTerminal: boolean;
 };
@@ -64,31 +66,36 @@ const templates = [
     key: "training_welcome_intro",
     name: "Capacitacion - Bienvenida",
     body: "Hola soy Nutrigi\nACYGP Entidad certificadora\n\n🎊🔓 ¡Que gusto tenerte aquí! Soy tu facilitadora virtual.\nEstas en el nivel inicial de tu capacitacion.\nDurante tu capacitacion recorreras 4 modulos:\nI. Verificacion de condiciones para la preparacion de alimentos higienicamente en el expendio escolar.\nII. Ejecucion de practicas higienicas antes de preparar alimentos en el expendio escolar.\nIII. Preparacion de alimentos y bebidas nutritivas de acuerdo con la normatividad para expendios escolares.\nIV. Proporcionar los alimentos a la comunidad escolar en el expendio.\n\n💡 Si durante el recorrido necesitas ayuda, escribe AYUDA aqui en WhatsApp.\n\n¡Tu decides en que momento avanzar!\nPuedes dedicarle 60 minutos al dia y te recomiendo tener una libreta para anotar lo que vas aprendiendo.\n\n¿Estas lista/o para emprender este nuevo recorrido?\nEscribe: SI VAMOS",
-    kind: TemplateKind.TEXT,
+    kind: TemplateKind.TWILIO_CONTENT_TEMPLATE,
+    twilioContentSid: null,
   },
   {
     key: "training_materials_intro",
     name: "Capacitacion - Materiales",
     body: "¡Excelente!\nDe ahora en adelante te presentare videos, audios, infografias, imagenes y algunas lecturas.\nPara ver los videos deberas presionar en los enlaces de color azul cada vez que te aparezcan.\nNo olvides que luego de ver cada video siempre debes regresar aqui a este chat de WhatsApp para seguir aprendiendo.\n\nSelecciona aqui para descargar tu manual de trabajo: [PENDIENTE_LINK_MANUAL]\n\n🤖📲 ¡Antes de olvidarme!\nSi abandonas el chat por mas de 24 horas, podrias perder tus avances y tendrias que regresar a tu capacitacion desde cero.\nTe enviaremos algunos recordatorios para ayudarte a continuar.\n\nCuando estes lista/o escribe: VAMOS",
-    kind: TemplateKind.TEXT,
+    kind: TemplateKind.TWILIO_CONTENT_TEMPLATE,
+    twilioContentSid: null,
   },
   {
     key: "training_module_1_intro",
     name: "Modulo 1 - Introduccion",
     body: "Recuerda seguir las instrucciones unicamente de este chat.\n⭐ Comenzamos con el modulo I:\nVerificacion de condiciones para la preparacion de alimentos higienicamente en el expendio escolar.\nEncontraras 12 temas y al finalizar podras desbloquear el modulo II.\n\n➡️ Mira el video seleccionando el link de color azul y aprenderas los conceptos basicos de higiene, nutricion, centro escolar y cooperativa/tienda/cafeteria escolar.\n[PENDIENTE_LINK_VIDEO_MODULO_1]\n\nSi estas lista/o avísame escribiendo: VAMOS",
-    kind: TemplateKind.TEXT,
+    kind: TemplateKind.TWILIO_CONTENT_TEMPLATE,
+    twilioContentSid: null,
   },
   {
     key: "training_cafeteria_experience",
     name: "Modulo 1 - Experiencia cafeteria",
     body: "¿Hace cuanto tiempo tienes tu cafeteria?\n1) Menos de 6 meses\n2) Entre 6 meses y 1 año\n3) Entre 1 y 2 años\n4) Mas de 2 años",
-    kind: TemplateKind.TEXT,
+    kind: TemplateKind.TWILIO_CONTENT_TEMPLATE,
+    twilioContentSid: null,
   },
   {
     key: "training_eta_audio",
     name: "Modulo 1 - ETAs audio",
     body: "Selecciona aqui para descargar el video: [PENDIENTE_LINK_VIDEO_ETA]\nTe recomiendo tomar nota en tu libreta para que no te pierdas de nada.\n\n👀 Te comparto este audio sobre las Enfermedades Transmitidas por los Alimentos (ETA's):\n[PENDIENTE_LINK_AUDIO_ETA]\n\nCuando quieras avanzar escribe: VAMOS",
-    kind: TemplateKind.TEXT,
+    kind: TemplateKind.TWILIO_CONTENT_TEMPLATE,
+    twilioContentSid: null,
   },
   {
     key: "training_eta_activity",
@@ -101,49 +108,57 @@ const templates = [
     key: "training_supply_chain",
     name: "Modulo 1 - Cadena de suministro",
     body: "➡️ Selecciona el link para ver este video y descubre la cadena de suministro de alimentos y los tipos principales de contaminacion alimentaria.\n[PENDIENTE_LINK_VIDEO_CADENA_SUMINISTRO]\n\nAl terminar, escribe: CONTINUEMOS",
-    kind: TemplateKind.TEXT,
+    kind: TemplateKind.TWILIO_CONTENT_TEMPLATE,
+    twilioContentSid: null,
   },
   {
     key: "training_regulation_intro",
     name: "Modulo 1 - Marco normativo",
     body: "✅ Aprenderas sobre el marco normativo en Mexico para la higiene y preparacion de alimentos, basado en la Ley General de Salud y la NOM-251-SSA1-2009.\nEsta norma establece practicas obligatorias de higiene para el proceso de alimentos, bebidas o suplementos, incluyendo instalaciones, equipos, personal y control de operaciones para garantizar la inocuidad.\n\n⭐ Descarga la norma:\nhttps://dof.gob.mx/nota_detalle.php%3Fcodigo%3D5133449%26fecha%3D01/03/2010&print=true\n\nTómate tu tiempo y cuando termines escribe: CONTINUAR",
-    kind: TemplateKind.TEXT,
+    kind: TemplateKind.TWILIO_CONTENT_TEMPLATE,
+    twilioContentSid: null,
   },
   {
     key: "training_hygiene_summary",
     name: "Modulo 1 - Resumen higiene",
     body: "✅ Los equipos, utensilios y superficies en contacto con alimentos deben ser de materiales lisos, no porosos y de facil limpieza.\n✅ Deben lavarse y desinfectarse para evitar contaminacion.\n✅ Las instalaciones, incluyendo pisos, paredes y techos, deben mantenerse limpias y en buen estado.\n✅ Es obligatorio el lavado de manos del personal antes de iniciar labores, al regresar de ausencias y despues de manipular material sucio.\n✅ Los establecimientos deben contar con agua potable para la limpieza y desinfeccion.\n\nCuando quieras avanzar escribe: VAMOS",
-    kind: TemplateKind.TEXT,
+    kind: TemplateKind.TWILIO_CONTENT_TEMPLATE,
+    twilioContentSid: null,
   },
   {
     key: "training_cleaning_schedule",
     name: "Modulo 1 - Calendarizacion limpieza",
     body: "➡️ Selecciona el link para ver este video y descubre como es el procedimiento de limpieza y desinfectado especifico para instalaciones, equipos y transporte.\n[PENDIENTE_LINK_VIDEO_LIMPIEZA]\n\n✅ Ahora hagamos una calendarizacion y frecuencia por area o por equipo, con la persona responsable de llevarlo a cabo.\nDescarga el formato y trabajemos:\n[PENDIENTE_LINK_FORMATO_CALENDARIZACION]\n\nCuando estes lista/o escribe: VAMOS",
-    kind: TemplateKind.TEXT,
+    kind: TemplateKind.TWILIO_CONTENT_TEMPLATE,
+    twilioContentSid: null,
   },
   {
     key: "training_drying_quiz",
     name: "Modulo 1 - Quiz secado",
     body: "✅ ➡️ Selecciona el link para ver este video y descubre el proceso de limpieza y secado.\n[PENDIENTE_LINK_VIDEO_SECADO]\n\n💡 ¿La norma menciona que el equipo y los utensilios no se sequen al aire libre para evitar la contaminacion por trapos o paños, los cuales pueden albergar bacterias?\nResponde: VERDADERO o FALSO",
-    kind: TemplateKind.TEXT,
+    kind: TemplateKind.TWILIO_CONTENT_TEMPLATE,
+    twilioContentSid: null,
   },
   {
     key: "training_temperature_control",
     name: "Modulo 1 - Control temperatura",
     body: "✅ ➡️ Selecciona el link para ver este video y descubre el control de temperaturas de los alimentos.\n[PENDIENTE_LINK_VIDEO_TEMPERATURA]\n\n🚨 Si deseas avanzar, por favor escribe exactamente: CONTINUAR",
-    kind: TemplateKind.TEXT,
+    kind: TemplateKind.TWILIO_CONTENT_TEMPLATE,
+    twilioContentSid: null,
   },
   {
     key: "training_services_infographic",
     name: "Modulo 1 - Servicios",
     body: "✅ ➡️ Selecciona el link y descarga la infografia de recomendaciones de los servicios de agua, aire y energia en tu establecimiento.\n[PENDIENTE_LINK_INFOGRAFIA_SERVICIOS]\n\nCuando estes lista/o escribe: CONTINUAR",
-    kind: TemplateKind.TEXT,
+    kind: TemplateKind.TWILIO_CONTENT_TEMPLATE,
+    twilioContentSid: null,
   },
   {
     key: "training_evaluation_intro",
     name: "Modulo 1 - Evaluacion",
     body: "📚 ¡Ya llega la evaluacion!\nSi necesitas revisar el material, puedes tomar unos minutos para hacerlo.\n\nCuando quieras avanzar escribe: TEST\nTu respuesta esperada sera de tipo Correcto o Incorrecto.",
-    kind: TemplateKind.TEXT,
+    kind: TemplateKind.TWILIO_CONTENT_TEMPLATE,
+    twilioContentSid: null,
   },
   {
     key: "training_module_2_intro",
@@ -194,6 +209,7 @@ const flowDefinitions: SeedFlow[] = [
         name: "Introduccion capacitacion",
         templateKey: "training_welcome_intro",
         inputType: FlowStepInputType.CHOICE,
+        renderMode: FlowStepRenderMode.AUTO,
         isTerminal: false,
       },
       {
@@ -201,6 +217,7 @@ const flowDefinitions: SeedFlow[] = [
         name: "Materiales e instrucciones",
         templateKey: "training_materials_intro",
         inputType: FlowStepInputType.CHOICE,
+        renderMode: FlowStepRenderMode.AUTO,
         isTerminal: false,
       },
       {
@@ -208,6 +225,7 @@ const flowDefinitions: SeedFlow[] = [
         name: "Introduccion modulo 1",
         templateKey: "training_module_1_intro",
         inputType: FlowStepInputType.CHOICE,
+        renderMode: FlowStepRenderMode.AUTO,
         isTerminal: false,
       },
       {
@@ -215,6 +233,7 @@ const flowDefinitions: SeedFlow[] = [
         name: "Experiencia cafeteria",
         templateKey: "training_cafeteria_experience",
         inputType: FlowStepInputType.CHOICE,
+        renderMode: FlowStepRenderMode.AUTO,
         captureKey: "cafeteriaExperience",
         isTerminal: false,
       },
@@ -223,6 +242,7 @@ const flowDefinitions: SeedFlow[] = [
         name: "Audio ETAs",
         templateKey: "training_eta_audio",
         inputType: FlowStepInputType.CHOICE,
+        renderMode: FlowStepRenderMode.AUTO,
         isTerminal: false,
       },
       {
@@ -237,6 +257,7 @@ const flowDefinitions: SeedFlow[] = [
         name: "Cadena de suministro",
         templateKey: "training_supply_chain",
         inputType: FlowStepInputType.CHOICE,
+        renderMode: FlowStepRenderMode.AUTO,
         isTerminal: false,
       },
       {
@@ -244,6 +265,7 @@ const flowDefinitions: SeedFlow[] = [
         name: "Marco normativo",
         templateKey: "training_regulation_intro",
         inputType: FlowStepInputType.CHOICE,
+        renderMode: FlowStepRenderMode.AUTO,
         isTerminal: false,
       },
       {
@@ -251,6 +273,7 @@ const flowDefinitions: SeedFlow[] = [
         name: "Resumen higiene",
         templateKey: "training_hygiene_summary",
         inputType: FlowStepInputType.CHOICE,
+        renderMode: FlowStepRenderMode.AUTO,
         isTerminal: false,
       },
       {
@@ -258,6 +281,7 @@ const flowDefinitions: SeedFlow[] = [
         name: "Calendarizacion limpieza",
         templateKey: "training_cleaning_schedule",
         inputType: FlowStepInputType.CHOICE,
+        renderMode: FlowStepRenderMode.AUTO,
         isTerminal: false,
       },
       {
@@ -265,6 +289,7 @@ const flowDefinitions: SeedFlow[] = [
         name: "Quiz secado",
         templateKey: "training_drying_quiz",
         inputType: FlowStepInputType.CHOICE,
+        renderMode: FlowStepRenderMode.AUTO,
         captureKey: "dryingQuizAnswer",
         isTerminal: false,
       },
@@ -273,6 +298,7 @@ const flowDefinitions: SeedFlow[] = [
         name: "Control temperatura",
         templateKey: "training_temperature_control",
         inputType: FlowStepInputType.CHOICE,
+        renderMode: FlowStepRenderMode.AUTO,
         isTerminal: false,
       },
       {
@@ -280,6 +306,7 @@ const flowDefinitions: SeedFlow[] = [
         name: "Infografia servicios",
         templateKey: "training_services_infographic",
         inputType: FlowStepInputType.CHOICE,
+        renderMode: FlowStepRenderMode.AUTO,
         isTerminal: false,
       },
       {
@@ -287,6 +314,7 @@ const flowDefinitions: SeedFlow[] = [
         name: "Evaluacion modulo 1",
         templateKey: "training_evaluation_intro",
         inputType: FlowStepInputType.CHOICE,
+        renderMode: FlowStepRenderMode.AUTO,
         isTerminal: false,
       },
       {
@@ -299,8 +327,8 @@ const flowDefinitions: SeedFlow[] = [
     ],
     transitions: [
       { stepKey: "training_welcome_intro", matchType: BotRuleMatchType.EXACT, pattern: "si vamos", nextStepKey: "training_materials_intro", priority: 1 },
-      { stepKey: "training_welcome_intro", matchType: BotRuleMatchType.EXACT, pattern: "si", nextStepKey: "training_materials_intro", priority: 2 },
-      { stepKey: "training_welcome_intro", matchType: BotRuleMatchType.EXACT, pattern: "vamos", nextStepKey: "training_materials_intro", priority: 3 },
+      { stepKey: "training_welcome_intro", matchType: BotRuleMatchType.KEYWORD, pattern: "si", nextStepKey: "training_materials_intro", priority: 2 },
+      { stepKey: "training_welcome_intro", matchType: BotRuleMatchType.KEYWORD, pattern: "vamos", nextStepKey: "training_materials_intro", priority: 3 },
       { stepKey: "training_welcome_intro", matchType: BotRuleMatchType.FALLBACK, pattern: "*", nextStepKey: "training_welcome_intro", priority: 999 },
       { stepKey: "training_materials_intro", matchType: BotRuleMatchType.EXACT, pattern: "vamos", nextStepKey: "training_module_1_intro", priority: 1 },
       { stepKey: "training_materials_intro", matchType: BotRuleMatchType.FALLBACK, pattern: "*", nextStepKey: "training_materials_intro", priority: 999 },
@@ -466,6 +494,7 @@ async function main() {
           name: step.name,
           templateKey: step.templateKey,
           inputType: step.inputType,
+          renderMode: step.renderMode ?? FlowStepRenderMode.TEXT,
           captureKey: step.captureKey,
           isTerminal: step.isTerminal,
           isActive: true,

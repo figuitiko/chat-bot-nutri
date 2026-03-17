@@ -1,4 +1,10 @@
-import { MessageStatus, MessageType } from "@/generated/prisma/client";
+import {
+  FlowStepRenderMode,
+  MessageStatus,
+  MessageType,
+  type BotFlowStep,
+  type BotFlowTransition,
+} from "@/generated/prisma/client";
 
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
@@ -14,7 +20,17 @@ import {
 } from "@/lib/bot/state-machine";
 import { upsertContactByPhone } from "@/lib/services/contacts-service";
 import { storeOutboundMessage } from "@/lib/services/messages-service";
-import { sendWhatsAppTemplateMessage, sendWhatsAppTextMessage } from "@/lib/twilio";
+import {
+  createWhatsAppInteractiveTemplate,
+  sendWhatsAppTemplateMessage,
+  sendWhatsAppTextMessage,
+  type WhatsAppInteractiveMode,
+  type WhatsAppInteractiveOption,
+} from "@/lib/twilio";
+
+type StepWithTransitions = Pick<BotFlowStep, "id" | "key" | "renderMode"> & {
+  transitions: Array<Pick<BotFlowTransition, "matchType" | "pattern" | "outputValue" | "priority">>;
+};
 
 async function getActiveTemplate(templateKey: string) {
   const template = await db.messageTemplate.findFirst({
@@ -41,6 +57,12 @@ async function getFlowWithEntryStep(flowKey: string) {
       steps: {
         where: { isActive: true },
         orderBy: { createdAt: "asc" },
+        include: {
+          transitions: {
+            where: { isActive: true },
+            orderBy: { priority: "asc" },
+          },
+        },
       },
     },
   });
@@ -56,6 +78,18 @@ async function getFlowWithEntryStep(flowKey: string) {
   }
 
   return { flow, entryStep };
+}
+
+async function getStepWithTransitions(stepId: string) {
+  return db.botFlowStep.findUnique({
+    where: { id: stepId },
+    include: {
+      transitions: {
+        where: { isActive: true },
+        orderBy: { priority: "asc" },
+      },
+    },
+  });
 }
 
 function resolveTemplateMediaUrl(mediaUrl: string | null | undefined) {
@@ -81,18 +115,157 @@ function buildFallbackBody(body: string, mediaUrl?: string) {
   return `${body}\n\nRecurso: ${mediaUrl}`;
 }
 
+function toTitleCase(value: string) {
+  return value
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(" ");
+}
+
+function buildChoiceTitle(transition: Pick<BotFlowTransition, "pattern" | "outputValue">) {
+  const pattern = transition.pattern.trim();
+  const outputValue = transition.outputValue?.trim();
+
+  if (outputValue) {
+    return /^\d+$/.test(pattern) ? pattern : outputValue;
+  }
+
+  return toTitleCase(pattern);
+}
+
+function buildChoiceDescription(transition: Pick<BotFlowTransition, "pattern" | "outputValue">) {
+  const pattern = transition.pattern.trim();
+  const outputValue = transition.outputValue?.trim();
+
+  if (!outputValue || !/^\d+$/.test(pattern)) {
+    return undefined;
+  }
+
+  return outputValue;
+}
+
+function buildInteractiveOptions(step: StepWithTransitions): WhatsAppInteractiveOption[] {
+  const visibleTransitions = step.transitions.some((transition) => transition.matchType === "EXACT")
+    ? step.transitions.filter((transition) => transition.matchType === "EXACT")
+    : step.transitions.filter((transition) => transition.matchType !== "FALLBACK");
+
+  return visibleTransitions
+    .map((transition) => ({
+      id: transition.pattern,
+      title: buildChoiceTitle(transition),
+      description: buildChoiceDescription(transition),
+    }))
+    .filter(
+      (option, index, options) =>
+        option.id &&
+        options.findIndex((candidate) => candidate.id === option.id) === index,
+    );
+}
+
+function resolveInteractiveMode(
+  step: StepWithTransitions,
+  options: WhatsAppInteractiveOption[],
+): WhatsAppInteractiveMode | null {
+  if (options.length < 1) {
+    return null;
+  }
+
+  if (step.renderMode === FlowStepRenderMode.QUICK_REPLY) {
+    return options.length <= 3 ? "quick-reply" : null;
+  }
+
+  if (step.renderMode === FlowStepRenderMode.LIST_PICKER) {
+    return options.length <= 10 ? "list-picker" : null;
+  }
+
+  if (step.renderMode !== FlowStepRenderMode.AUTO) {
+    return null;
+  }
+
+  if (options.length <= 3) {
+    return "quick-reply";
+  }
+
+  if (options.length <= 10) {
+    return "list-picker";
+  }
+
+  return null;
+}
+
+async function ensureInteractiveTemplateSid(input: {
+  templateId: string;
+  templateKey: string;
+  templateName: string;
+  body: string;
+  language: string;
+  existingContentSid: string | null;
+  variables?: Record<string, string>;
+  step?: StepWithTransitions;
+}) {
+  if (!input.step) {
+    return input.existingContentSid;
+  }
+
+  const options = buildInteractiveOptions(input.step);
+  const mode = resolveInteractiveMode(input.step, options);
+
+  if (!mode) {
+    return input.existingContentSid;
+  }
+
+  const shouldPersist = !input.variables || Object.keys(input.variables).length === 0;
+
+  if (input.existingContentSid && shouldPersist) {
+    return input.existingContentSid;
+  }
+
+  const content = await createWhatsAppInteractiveTemplate({
+    friendlyName: `${input.templateName} (${input.step.key})`,
+    language: input.language,
+    body: input.body,
+    mode,
+    options,
+  });
+
+  if (shouldPersist) {
+    await db.messageTemplate.update({
+      where: { id: input.templateId },
+      data: {
+        twilioContentSid: content.sid,
+      },
+    });
+  }
+
+  return content.sid;
+}
+
 export async function sendTemplateByKey(input: {
   contactId: string;
   contactPhone: string;
   templateKey: string;
   variables?: Record<string, string>;
   conversationId?: string | null;
+  step?: StepWithTransitions;
 }) {
   const template = await getActiveTemplate(input.templateKey);
+  const renderedBody = renderTemplateBody(ensureTemplateBody(template.body), input.variables);
 
   try {
     if (template.kind === "TWILIO_CONTENT_TEMPLATE") {
-      if (!template.twilioContentSid) {
+      const contentSid = await ensureInteractiveTemplateSid({
+        templateId: template.id,
+        templateKey: input.templateKey,
+        templateName: template.name,
+        body: renderedBody,
+        language: template.language,
+        existingContentSid: template.twilioContentSid,
+        variables: input.variables,
+        step: input.step,
+      });
+
+      if (!contentSid) {
         throw new AppError(
           "INVALID_TEMPLATE",
           `Template "${input.templateKey}" is missing twilioContentSid.`,
@@ -102,12 +275,12 @@ export async function sendTemplateByKey(input: {
 
       const providerMessage = await sendWhatsAppTemplateMessage({
         to: input.contactPhone,
-        contentSid: template.twilioContentSid,
+        contentSid,
         variables: input.variables,
       });
 
       const persisted = await storeOutboundMessage({
-        body: ensureTemplateBody(template.body),
+        body: renderedBody,
         contactId: input.contactId,
         conversationId: input.conversationId,
         providerMessageSid: providerMessage.sid,
@@ -120,7 +293,7 @@ export async function sendTemplateByKey(input: {
       return { template, providerMessage, persisted };
     }
 
-    const body = renderTemplateBody(ensureTemplateBody(template.body), input.variables);
+    const body = renderedBody;
     const resolvedMediaUrl = resolveTemplateMediaUrl(template.mediaUrl);
     let providerMessage;
 
@@ -228,6 +401,7 @@ export async function startFlowConversation(input: {
     templateKey: entryStep.templateKey,
     variables: readConversationContext(contextData),
     conversationId: conversation.id,
+    step: entryStep,
   });
 
   await Promise.all([
@@ -298,7 +472,12 @@ export async function progressConversation(input: {
     conversation.contextData,
     resolveCapturedValue(conversation.currentStep, transition, input.text),
   );
-  const nextStep = transition.nextStep;
+  const nextStep = await getStepWithTransitions(transition.nextStep.id);
+
+  if (!nextStep) {
+    return null;
+  }
+
   const nextStatus = nextStep.isTerminal ? "CLOSED" : "OPEN";
   const nextCurrentStepId = nextStep.isTerminal ? null : nextStep.id;
   const nextFlowId = nextStep.flowId;
@@ -359,6 +538,7 @@ export async function progressConversation(input: {
     templateKey: nextStep.templateKey,
     variables: readConversationContext(contextData),
     conversationId: updatedConversation.id,
+    step: nextStep,
   });
 
   await db.contact.update({
