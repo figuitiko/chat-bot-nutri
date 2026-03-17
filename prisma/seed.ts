@@ -93,7 +93,7 @@ const templates = [
   {
     key: "training_eta_audio",
     name: "Modulo 1 - ETAs audio",
-    body: "Selecciona aqui para descargar el video: [PENDIENTE_LINK_VIDEO_ETA]\nTe recomiendo tomar nota en tu libreta para que no te pierdas de nada.\n\n👀 Te comparto este audio sobre las Enfermedades Transmitidas por los Alimentos (ETA's):\n[PENDIENTE_LINK_AUDIO_ETA]\n\nCuando quieras avanzar escribe: VAMOS",
+    body: "Selecciona aqui para descargar el video: [PENDIENTE_LINK_VIDEO_ETA]\nTe recomiendo tomar nota en tu libreta para que no te pierdas de nada.\n\n👀 Te comparto el audio adjunto sobre las Enfermedades Transmitidas por los Alimentos (ETA's).\n\nCuando quieras avanzar escribe: VAMOS",
     kind: TemplateKind.TWILIO_CONTENT_TEMPLATE,
     mediaUrl: "/training-assets/audio-nutri.mp3",
     twilioContentSid: null,
@@ -101,7 +101,7 @@ const templates = [
   {
     key: "training_eta_activity",
     name: "Modulo 1 - Actividad ETAs",
-    body: "Ahora descarga el formato y vas a crear las principales enfermedades transmitidas por alimentos.\nTómate tu tiempo y cuando termines escribe: CONTINUAR",
+    body: "Te comparto la imagen adjunta para esta actividad.\nAhora descarga el formato y vas a crear las principales enfermedades transmitidas por alimentos.\nTómate tu tiempo y cuando termines escribe: CONTINUAR",
     mediaUrl: "/training-assets/modulo-1-eta-agentes.png",
     kind: TemplateKind.TWILIO_CONTENT_TEMPLATE,
   },

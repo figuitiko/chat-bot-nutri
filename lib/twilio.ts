@@ -15,14 +15,14 @@ export type WhatsAppInteractiveOption = {
 
 export async function sendWhatsAppTextMessage(input: {
   to: string;
-  body: string;
+  body?: string;
   mediaUrl?: string | string[];
   statusCallbackUrl?: string;
 }) {
   return client.messages.create({
     from: env.TWILIO_WHATSAPP_FROM,
     to: normalizeWhatsAppAddress(input.to),
-    body: input.body,
+    ...(input.body ? { body: input.body } : {}),
     mediaUrl:
       typeof input.mediaUrl === "string"
         ? [input.mediaUrl]

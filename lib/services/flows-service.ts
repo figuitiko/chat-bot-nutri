@@ -241,6 +241,39 @@ async function ensureInteractiveTemplateSid(input: {
   return content.sid;
 }
 
+async function sendMediaAttachment(input: {
+  contactId: string;
+  contactPhone: string;
+  conversationId?: string | null;
+  templateKey: string;
+  mediaUrl: string;
+}) {
+  try {
+    const providerMessage = await sendWhatsAppTextMessage({
+      to: input.contactPhone,
+      mediaUrl: input.mediaUrl,
+    });
+
+    await storeOutboundMessage({
+      body: input.mediaUrl,
+      contactId: input.contactId,
+      conversationId: input.conversationId,
+      providerMessageSid: providerMessage.sid,
+      rawPayload: providerMessage,
+      status: MessageStatus.QUEUED,
+      templateKey: input.templateKey,
+      messageType: MessageType.TEXT,
+    });
+  } catch (error) {
+    logger.warn("twilio.media.attachment_failed", {
+      contactPhone: input.contactPhone,
+      templateKey: input.templateKey,
+      mediaUrl: input.mediaUrl,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+}
+
 export async function sendTemplateByKey(input: {
   contactId: string;
   contactPhone: string;
@@ -254,6 +287,18 @@ export async function sendTemplateByKey(input: {
 
   try {
     if (template.kind === "TWILIO_CONTENT_TEMPLATE") {
+      const resolvedMediaUrl = resolveTemplateMediaUrl(template.mediaUrl);
+
+      if (resolvedMediaUrl) {
+        await sendMediaAttachment({
+          contactId: input.contactId,
+          contactPhone: input.contactPhone,
+          conversationId: input.conversationId,
+          templateKey: input.templateKey,
+          mediaUrl: resolvedMediaUrl,
+        });
+      }
+
       const contentSid = await ensureInteractiveTemplateSid({
         templateId: template.id,
         templateKey: input.templateKey,
