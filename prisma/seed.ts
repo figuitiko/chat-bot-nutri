@@ -305,6 +305,7 @@ const flowDefinitions: SeedFlow[] = [
         name: "Actividad ETAs",
         templateKey: "training_eta_activity",
         inputType: FlowStepInputType.CHOICE,
+        renderMode: FlowStepRenderMode.AUTO,
         isTerminal: false,
       },
       {
