@@ -53,9 +53,13 @@ export async function createWhatsAppInteractiveTemplate(input: {
   mode: WhatsAppInteractiveMode;
   options: WhatsAppInteractiveOption[];
 }) {
+  const normalizedLanguage = input.language.split(/[-_]/)[0] || "es";
   const types =
     input.mode === "list-picker"
       ? {
+          "twilio/text": {
+            body: input.body,
+          },
           "twilio/list-picker": {
             body: input.body,
             button: "OPCIONES",
@@ -67,6 +71,9 @@ export async function createWhatsAppInteractiveTemplate(input: {
           },
         }
       : {
+          "twilio/text": {
+            body: input.body,
+          },
           "twilio/quick-reply": {
             body: input.body,
             actions: input.options.map((option) => ({
@@ -78,7 +85,7 @@ export async function createWhatsAppInteractiveTemplate(input: {
 
   return client.content.v1.contents.create({
     friendlyName: input.friendlyName,
-    language: input.language,
+    language: normalizedLanguage,
     types: types as never,
   });
 }
