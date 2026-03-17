@@ -274,6 +274,32 @@ async function sendMediaAttachment(input: {
   }
 }
 
+async function sendPlainTextFollowUp(input: {
+  contactId: string;
+  contactPhone: string;
+  conversationId?: string | null;
+  templateKey: string;
+  body: string;
+}) {
+  const providerMessage = await sendWhatsAppTextMessage({
+    to: input.contactPhone,
+    body: input.body,
+  });
+
+  const persisted = await storeOutboundMessage({
+    body: input.body,
+    contactId: input.contactId,
+    conversationId: input.conversationId,
+    providerMessageSid: providerMessage.sid,
+    rawPayload: providerMessage,
+    status: MessageStatus.QUEUED,
+    templateKey: input.templateKey,
+    messageType: MessageType.TEXT,
+  });
+
+  return { providerMessage, persisted };
+}
+
 export async function sendTemplateByKey(input: {
   contactId: string;
   contactPhone: string;
@@ -311,11 +337,17 @@ export async function sendTemplateByKey(input: {
       });
 
       if (!contentSid) {
-        throw new AppError(
-          "INVALID_TEMPLATE",
-          `Template "${input.templateKey}" is missing twilioContentSid.`,
-          500,
-        );
+        return sendPlainTextFollowUp({
+          contactId: input.contactId,
+          contactPhone: input.contactPhone,
+          conversationId: input.conversationId,
+          templateKey: input.templateKey,
+          body: renderedBody,
+        }).then(({ providerMessage, persisted }) => ({
+          template,
+          providerMessage,
+          persisted,
+        }));
       }
 
       const providerMessage = await sendWhatsAppTemplateMessage({
