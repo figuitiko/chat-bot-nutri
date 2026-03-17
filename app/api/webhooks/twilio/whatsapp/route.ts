@@ -1,7 +1,6 @@
 import type { NextRequest } from "next/server";
 
 import { TWILIO_SIGNATURE_HEADER } from "@/lib/constants";
-import { handleRouteError } from "@/lib/http";
 import { logger } from "@/lib/logger";
 import { processInboundWebhook } from "@/lib/services/webhooks-service";
 import { buildEmptyTwimlResponse, verifyTwilioSignature } from "@/lib/twilio";
@@ -40,7 +39,6 @@ export async function POST(request: NextRequest) {
     logger.error("webhook.inbound.failed", {
       error: error instanceof Error ? error.message : "Unknown error",
     });
-    const response = handleRouteError(error);
-    return twimlResponse(buildEmptyTwimlResponse(), response.status);
+    return twimlResponse(buildEmptyTwimlResponse());
   }
 }
