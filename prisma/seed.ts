@@ -102,6 +102,7 @@ const templates = [
     name: "Modulo 1 - ETAs audio",
     body: "Selecciona aqui para descargar el video: [PENDIENTE_LINK_VIDEO_ETA]\nTe recomiendo tomar nota en tu libreta para que no te pierdas de nada.\n\n👀 Te comparto el audio adjunto sobre las Enfermedades Transmitidas por los Alimentos (ETA's).\n\nCuando quieras avanzar da click en VAMOS o escribe: VAMOS",
     kind: TemplateKind.TWILIO_CONTENT_TEMPLATE,
+    deliveryMode: TemplateDeliveryMode.MEDIA_FIRST,
     mediaUrl: "/training-assets/audio-nutri.mp3",
     twilioContentSid: null,
   },
