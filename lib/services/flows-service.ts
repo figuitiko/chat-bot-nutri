@@ -399,13 +399,14 @@ export async function sendTemplateByKey(input: {
   variables?: Record<string, string>;
   conversationId?: string | null;
   step?: StepWithTransitions;
+  skipMedia?: boolean;
 }) {
   const template = await getActiveTemplate(input.templateKey);
   const renderedBody = renderTemplateBody(ensureTemplateBody(template.body), input.variables);
 
   try {
     if (template.kind === "TWILIO_CONTENT_TEMPLATE") {
-      const resolvedMediaUrl = resolveTemplateMediaUrl(template.mediaUrl);
+      const resolvedMediaUrl = input.skipMedia ? undefined : resolveTemplateMediaUrl(template.mediaUrl);
       const contentSid = await ensureInteractiveTemplateSid({
         templateId: template.id,
         templateKey: input.templateKey,
@@ -500,7 +501,7 @@ export async function sendTemplateByKey(input: {
     }
 
     const body = renderedBody;
-    const resolvedMediaUrl = resolveTemplateMediaUrl(template.mediaUrl);
+    const resolvedMediaUrl = input.skipMedia ? undefined : resolveTemplateMediaUrl(template.mediaUrl);
     let providerMessage;
 
     try {

@@ -426,6 +426,7 @@ export async function processStatusCallback(payload: Record<string, string | und
                 )
               : undefined,
           step: step ?? undefined,
+          skipMedia: true,
         });
       }
 
@@ -435,6 +436,7 @@ export async function processStatusCallback(payload: Record<string, string | und
           contactPhone: parseWhatsAppAddress(payload.To),
           templateKey,
           conversationId: message.conversationId,
+          skipMedia: true,
         });
       }
 
