@@ -69,8 +69,9 @@ const templates = [
   {
     key: "training_welcome_intro",
     name: "Capacitacion - Bienvenida",
-    body: "Hola soy Nutrigi\nACYGP Entidad certificadora\n\n🎊🔓 ¡Que gusto tenerte aquí! Soy tu facilitadora virtual.\nEstas en el nivel inicial de tu capacitacion.\nDurante tu capacitacion recorreras 4 modulos:\nI. Verificacion de condiciones para la preparacion de alimentos higienicamente en el expendio escolar.\nII. Ejecucion de practicas higienicas antes de preparar alimentos en el expendio escolar.\nIII. Preparacion de alimentos y bebidas nutritivas de acuerdo con la normatividad para expendios escolares.\nIV. Proporcionar los alimentos a la comunidad escolar en el expendio.\n\n💡 Si durante el recorrido necesitas ayuda, escribe AYUDA aqui en WhatsApp.\n\n¡Tu decides en que momento avanzar!\nPuedes dedicarle 60 minutos al dia y te recomiendo tener una libreta para anotar lo que vas aprendiendo.\n\n¿Estas lista/o para emprender este nuevo recorrido?\nEscribe: SI VAMOS",
+    body: "Durante tu capacitacion recorreras 4 modulos:\n*I. Verificacion de condiciones para la preparacion de alimentos higienicamente en el expendio escolar.*\n*II. Ejecucion de practicas higienicas antes de preparar alimentos en el expendio escolar.*\n*III. Preparacion de alimentos y bebidas nutritivas de acuerdo con la normatividad para expendios escolares.*\n]IV. Proporcionar los alimentos a la comunidad escolar en el expendio.*\n\n💡 Si durante el recorrido necesitas ayuda, escribe AYUDA aqui en WhatsApp.\n\n¡Tu decides en que momento avanzar!\nPuedes dedicarle 60 minutos al dia y te recomiendo tener una libreta para anotar lo que vas aprendiendo.\n\n¿Estas lista/o para emprender este nuevo recorrido?\nEscribe: SI VAMOS",
     kind: TemplateKind.TWILIO_CONTENT_TEMPLATE,
+    mediaUrl: "/training-assets/nutri.jpeg",
     twilioContentSid: null,
   },
   {
@@ -791,13 +792,6 @@ const flowDefinitions: SeedFlow[] = [
         pattern: "test",
         nextStepKey: "training_evaluation_q1",
         priority: 1,
-      },
-      {
-        stepKey: "training_evaluation_intro",
-        matchType: BotRuleMatchType.EXACT,
-        pattern: "vamos",
-        nextStepKey: "training_evaluation_q1",
-        priority: 2,
       },
       {
         stepKey: "training_evaluation_intro",
