@@ -129,6 +129,10 @@ model BotFlowStep {
   templateKey         String
   inputType           FlowStepInputType              @default(CHOICE)
   renderMode          FlowStepRenderMode             @default(TEXT)
+  assessmentKey       String?
+  correctAnswer       String?
+  scoreWeight         Int?
+  isAssessmentResult  Boolean                        @default(false)
   captureKey          String?
   isTerminal          Boolean                         @default(false)
   isActive            Boolean                         @default(true)

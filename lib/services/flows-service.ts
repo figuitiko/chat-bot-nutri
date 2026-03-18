@@ -28,7 +28,18 @@ import {
   type WhatsAppInteractiveOption,
 } from "@/lib/twilio";
 
-type StepWithTransitions = Pick<BotFlowStep, "id" | "key" | "renderMode"> & {
+type StepWithTransitions = Pick<
+  BotFlowStep,
+  | "id"
+  | "key"
+  | "flowId"
+  | "renderMode"
+  | "assessmentKey"
+  | "correctAnswer"
+  | "scoreWeight"
+  | "isAssessmentResult"
+  | "captureKey"
+> & {
   transitions: Array<Pick<BotFlowTransition, "matchType" | "pattern" | "outputValue" | "priority">>;
 };
 
@@ -113,6 +124,65 @@ function buildFallbackBody(body: string, mediaUrl?: string) {
   }
 
   return `${body}\n\nRecurso: ${mediaUrl}`;
+}
+
+async function buildConversationVariables(
+  contextData: Record<string, string>,
+  step?: StepWithTransitions,
+) {
+  const variables = { ...contextData };
+
+  if (step?.isAssessmentResult && step.assessmentKey) {
+    const scoredSteps = await db.botFlowStep.findMany({
+      where: {
+        flowId: step.flowId,
+        assessmentKey: step.assessmentKey,
+        isActive: true,
+        captureKey: {
+          not: null,
+        },
+        correctAnswer: {
+          not: null,
+        },
+        scoreWeight: {
+          not: null,
+        },
+      },
+      select: {
+        captureKey: true,
+        correctAnswer: true,
+        scoreWeight: true,
+      },
+    });
+
+    const totalQuestions = scoredSteps.length;
+    const totalWeight = scoredSteps.reduce((sum, scoredStep) => sum + (scoredStep.scoreWeight ?? 0), 0);
+    const earnedWeight = scoredSteps.reduce((sum, scoredStep) => {
+      if (!scoredStep.captureKey || !scoredStep.correctAnswer) {
+        return sum;
+      }
+
+      return contextData[scoredStep.captureKey] === scoredStep.correctAnswer
+        ? sum + (scoredStep.scoreWeight ?? 0)
+        : sum;
+    }, 0);
+    const correctAnswers = scoredSteps.filter(
+      (scoredStep) =>
+        scoredStep.captureKey &&
+        scoredStep.correctAnswer &&
+        contextData[scoredStep.captureKey] === scoredStep.correctAnswer,
+    ).length;
+    const percentage =
+      totalWeight > 0 ? Math.round((earnedWeight / totalWeight) * 100) : 0;
+
+    variables.evaluationCorrectAnswers = String(correctAnswers);
+    variables.evaluationTotalQuestions = String(totalQuestions);
+    variables.evaluationEarnedWeight = String(earnedWeight);
+    variables.evaluationTotalWeight = String(totalWeight);
+    variables.evaluationPercentage = String(percentage);
+  }
+
+  return variables;
 }
 
 function toTitleCase(value: string) {
@@ -476,7 +546,7 @@ export async function startFlowConversation(input: {
     contactId: input.contactId,
     contactPhone: input.contactPhone,
     templateKey: entryStep.templateKey,
-    variables: readConversationContext(contextData),
+    variables: await buildConversationVariables(readConversationContext(contextData), entryStep),
     conversationId: conversation.id,
     step: entryStep,
   });
@@ -613,7 +683,7 @@ export async function progressConversation(input: {
     contactId: conversation.contactId,
     contactPhone: input.contactPhone,
     templateKey: nextStep.templateKey,
-    variables: readConversationContext(contextData),
+    variables: await buildConversationVariables(readConversationContext(contextData), nextStep),
     conversationId: updatedConversation.id,
     step: nextStep,
   });
