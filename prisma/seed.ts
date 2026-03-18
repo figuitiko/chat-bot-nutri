@@ -69,7 +69,7 @@ const templates = [
   {
     key: "training_welcome_intro",
     name: "Capacitacion - Bienvenida",
-    body: "Durante tu capacitacion recorreras 4 modulos:\n*I. Verificacion de condiciones para la preparacion de alimentos higienicamente en el expendio escolar.*\n*II. Ejecucion de practicas higienicas antes de preparar alimentos en el expendio escolar.*\n*III. Preparacion de alimentos y bebidas nutritivas de acuerdo con la normatividad para expendios escolares.*\n]IV. Proporcionar los alimentos a la comunidad escolar en el expendio.*\n\n💡 Si durante el recorrido necesitas ayuda, escribe AYUDA aqui en WhatsApp.\n\n¡Tu decides en que momento avanzar!\nPuedes dedicarle 60 minutos al dia y te recomiendo tener una libreta para anotar lo que vas aprendiendo.\n\n¿Estas lista/o para emprender este nuevo recorrido?\nEscribe: SI VAMOS",
+    body: "Durante tu capacitacion recorreras 4 modulos:\n*I. Verificacion de condiciones para la preparacion de alimentos higienicamente en el expendio escolar.*\n*II. Ejecucion de practicas higienicas antes de preparar alimentos en el expendio escolar.*\n*III. Preparacion de alimentos y bebidas nutritivas de acuerdo con la normatividad para expendios escolares.*\n*IV. Proporcionar los alimentos a la comunidad escolar en el expendio.*\n\n💡 Si durante el recorrido necesitas ayuda, escribe AYUDA aqui en WhatsApp.\n\n¡Tu decides en que momento avanzar!\nPuedes dedicarle 60 minutos al dia y te recomiendo tener una libreta para anotar lo que vas aprendiendo.\n\n¿Estas lista/o para emprender este nuevo recorrido?\nEscribe: SI VAMOS",
     kind: TemplateKind.TWILIO_CONTENT_TEMPLATE,
     mediaUrl: "/training-assets/nutri.jpeg",
     twilioContentSid: null,
