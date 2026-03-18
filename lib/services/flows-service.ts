@@ -126,6 +126,10 @@ function buildFallbackBody(body: string, mediaUrl?: string) {
   return `${body}\n\nRecurso: ${mediaUrl}`;
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function buildConversationVariables(
   contextData: Record<string, string>,
   step?: StepWithTransitions,
@@ -393,6 +397,10 @@ export async function sendTemplateByKey(input: {
           templateKey: input.templateKey,
           mediaUrl: resolvedMediaUrl,
         });
+
+        if (env.TWILIO_MEDIA_FOLLOWUP_DELAY_MS > 0) {
+          await sleep(env.TWILIO_MEDIA_FOLLOWUP_DELAY_MS);
+        }
       }
 
       const contentSid = await ensureInteractiveTemplateSid({
