@@ -316,6 +316,10 @@ export async function processStatusCallback(payload: Record<string, string | und
     },
     select: {
       id: true,
+      contactId: true,
+      conversationId: true,
+      templateKey: true,
+      rawPayload: true,
       status: true,
     },
   });
@@ -325,6 +329,16 @@ export async function processStatusCallback(payload: Record<string, string | und
   }
 
   const nextStatus = mapTwilioStatus(messageStatus);
+  const messageRawPayload =
+    message.rawPayload && typeof message.rawPayload === "object" && !Array.isArray(message.rawPayload)
+      ? (message.rawPayload as Record<string, unknown>)
+      : {};
+  const deferredFollowUp =
+    messageRawPayload.deferredFollowUp &&
+    typeof messageRawPayload.deferredFollowUp === "object" &&
+    !Array.isArray(messageRawPayload.deferredFollowUp)
+      ? (messageRawPayload.deferredFollowUp as Record<string, unknown>)
+      : null;
 
   await Promise.all([
     db.message.update({
@@ -333,7 +347,10 @@ export async function processStatusCallback(payload: Record<string, string | und
         status: nextStatus,
         errorCode: payload.ErrorCode ?? null,
         errorMessage: payload.ErrorMessage ?? null,
-        rawPayload: payload,
+        rawPayload: {
+          ...messageRawPayload,
+          statusCallbackPayload: payload,
+        },
       },
     }),
     db.webhookEvent.update({
@@ -349,6 +366,107 @@ export async function processStatusCallback(payload: Record<string, string | und
       },
     }),
   ]);
+
+  const shouldDispatchFollowUp =
+    deferredFollowUp &&
+    ["SENT", "DELIVERED"].includes(nextStatus) &&
+    !deferredFollowUp.dispatchedAt;
+
+  if (shouldDispatchFollowUp) {
+    const followUpEventId = `followup:${messageSid}`;
+    const existingFollowUpEvent = await db.webhookEvent.findUnique({
+      where: {
+        source_eventId: {
+          source: "TWILIO_STATUS",
+          eventId: followUpEventId,
+        },
+      },
+      select: { id: true },
+    });
+
+    if (!existingFollowUpEvent) {
+      await upsertWebhookEvent({
+        source: "TWILIO_STATUS",
+        eventId: followUpEventId,
+        payload: deferredFollowUp as Prisma.InputJsonValue,
+        status: "RECEIVED",
+      });
+
+      const followUpType = String(deferredFollowUp.type ?? "");
+      const templateKey = String(deferredFollowUp.templateKey ?? "");
+
+      if (followUpType === "template" && templateKey) {
+        const stepId =
+          typeof deferredFollowUp.stepId === "string" ? deferredFollowUp.stepId : undefined;
+        const step = stepId
+          ? await db.botFlowStep.findUnique({
+              where: { id: stepId },
+              include: {
+                transitions: {
+                  where: { isActive: true },
+                  orderBy: { priority: "asc" },
+                },
+              },
+            })
+          : null;
+
+        await sendTemplateByKey({
+          contactId: message.contactId,
+          contactPhone: parseWhatsAppAddress(payload.To),
+          templateKey,
+          conversationId: message.conversationId,
+          variables:
+            deferredFollowUp.variables &&
+            typeof deferredFollowUp.variables === "object" &&
+            !Array.isArray(deferredFollowUp.variables)
+              ? Object.fromEntries(
+                  Object.entries(deferredFollowUp.variables as Record<string, unknown>).map(
+                    ([key, value]) => [key, String(value ?? "")],
+                  ),
+                )
+              : undefined,
+          step: step ?? undefined,
+        });
+      }
+
+      if (followUpType === "text" && templateKey) {
+        await sendTemplateByKey({
+          contactId: message.contactId,
+          contactPhone: parseWhatsAppAddress(payload.To),
+          templateKey,
+          conversationId: message.conversationId,
+        });
+      }
+
+      await Promise.all([
+        db.message.update({
+          where: { id: message.id },
+          data: {
+            rawPayload: {
+              ...messageRawPayload,
+              deferredFollowUp: {
+                ...deferredFollowUp,
+                dispatchedAt: new Date().toISOString(),
+              },
+              statusCallbackPayload: payload,
+            },
+          },
+        }),
+        db.webhookEvent.update({
+          where: {
+            source_eventId: {
+              source: "TWILIO_STATUS",
+              eventId: followUpEventId,
+            },
+          },
+          data: {
+            processedAt: new Date(),
+            status: "PROCESSED",
+          },
+        }),
+      ]);
+    }
+  }
 
   return {
     duplicate: false,

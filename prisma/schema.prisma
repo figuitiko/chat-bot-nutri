@@ -23,6 +23,11 @@ enum TemplateKind {
   TWILIO_CONTENT_TEMPLATE
 }
 
+enum TemplateDeliveryMode {
+  STANDARD
+  MEDIA_FIRST
+}
+
 enum ConversationStatus {
   OPEN
   CLOSED
@@ -165,18 +170,19 @@ model BotFlowTransition {
 }
 
 model MessageTemplate {
-  id               String          @id @default(cuid())
-  key              String          @unique
+  id               String               @id @default(cuid())
+  key              String               @unique
   name             String
-  channel          TemplateChannel @default(WHATSAPP)
-  kind             TemplateKind    @default(TEXT)
+  channel          TemplateChannel      @default(WHATSAPP)
+  kind             TemplateKind         @default(TEXT)
+  deliveryMode     TemplateDeliveryMode @default(STANDARD)
   body             String
   mediaUrl         String?
   twilioContentSid String?
-  language         String          @default("es-MX")
-  isActive         Boolean         @default(true)
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+  language         String               @default("es-MX")
+  isActive         Boolean              @default(true)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
 }
 
 model Conversation {

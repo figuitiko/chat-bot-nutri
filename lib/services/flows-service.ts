@@ -28,6 +28,22 @@ import {
   type WhatsAppInteractiveOption,
 } from "@/lib/twilio";
 
+type DeferredFollowUp =
+  | {
+      type: "template";
+      templateKey: string;
+      body: string;
+      conversationId?: string | null;
+      stepId?: string;
+      variables?: Record<string, string>;
+    }
+  | {
+      type: "text";
+      templateKey: string;
+      body: string;
+      conversationId?: string | null;
+    };
+
 type StepWithTransitions = Pick<
   BotFlowStep,
   | "id"
@@ -124,10 +140,6 @@ function buildFallbackBody(body: string, mediaUrl?: string) {
   }
 
   return `${body}\n\nRecurso: ${mediaUrl}`;
-}
-
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function buildConversationVariables(
@@ -321,6 +333,7 @@ async function sendMediaAttachment(input: {
   conversationId?: string | null;
   templateKey: string;
   mediaUrl: string;
+  deferredFollowUp?: DeferredFollowUp;
 }) {
   try {
     const providerMessage = await sendWhatsAppTextMessage({
@@ -333,11 +346,15 @@ async function sendMediaAttachment(input: {
       contactId: input.contactId,
       conversationId: input.conversationId,
       providerMessageSid: providerMessage.sid,
-      rawPayload: providerMessage,
+      rawPayload: {
+        providerMessage,
+        ...(input.deferredFollowUp ? { deferredFollowUp: input.deferredFollowUp } : {}),
+      },
       status: MessageStatus.QUEUED,
       templateKey: input.templateKey,
       messageType: MessageType.TEXT,
     });
+    return { providerMessage };
   } catch (error) {
     logger.warn("twilio.media.attachment_failed", {
       contactPhone: input.contactPhone,
@@ -345,6 +362,7 @@ async function sendMediaAttachment(input: {
       mediaUrl: input.mediaUrl,
       error: error instanceof Error ? error.message : "Unknown error",
     });
+    return null;
   }
 }
 
@@ -388,21 +406,6 @@ export async function sendTemplateByKey(input: {
   try {
     if (template.kind === "TWILIO_CONTENT_TEMPLATE") {
       const resolvedMediaUrl = resolveTemplateMediaUrl(template.mediaUrl);
-
-      if (resolvedMediaUrl) {
-        await sendMediaAttachment({
-          contactId: input.contactId,
-          contactPhone: input.contactPhone,
-          conversationId: input.conversationId,
-          templateKey: input.templateKey,
-          mediaUrl: resolvedMediaUrl,
-        });
-
-        if (env.TWILIO_MEDIA_FOLLOWUP_DELAY_MS > 0) {
-          await sleep(env.TWILIO_MEDIA_FOLLOWUP_DELAY_MS);
-        }
-      }
-
       const contentSid = await ensureInteractiveTemplateSid({
         templateId: template.id,
         templateKey: input.templateKey,
@@ -413,6 +416,54 @@ export async function sendTemplateByKey(input: {
         variables: input.variables,
         step: input.step,
       });
+
+      const shouldDeferFollowUpUntilMediaStatus =
+        resolvedMediaUrl && template.deliveryMode === "MEDIA_FIRST";
+
+      if (shouldDeferFollowUpUntilMediaStatus) {
+        const deferredFollowUp: DeferredFollowUp | undefined = contentSid
+          ? {
+              type: "template",
+              templateKey: input.templateKey,
+              body: renderedBody,
+              conversationId: input.conversationId,
+              stepId: input.step?.id,
+              variables: input.variables,
+            }
+          : {
+              type: "text",
+              templateKey: input.templateKey,
+              body: renderedBody,
+              conversationId: input.conversationId,
+            };
+
+        const mediaResult = await sendMediaAttachment({
+          contactId: input.contactId,
+          contactPhone: input.contactPhone,
+          conversationId: input.conversationId,
+          templateKey: input.templateKey,
+          mediaUrl: resolvedMediaUrl,
+          deferredFollowUp,
+        });
+
+        if (mediaResult) {
+          return {
+            template,
+            providerMessage: mediaResult.providerMessage,
+            persisted: null,
+          };
+        }
+      }
+
+      if (resolvedMediaUrl && !shouldDeferFollowUpUntilMediaStatus) {
+        await sendMediaAttachment({
+          contactId: input.contactId,
+          contactPhone: input.contactPhone,
+          conversationId: input.conversationId,
+          templateKey: input.templateKey,
+          mediaUrl: resolvedMediaUrl,
+        });
+      }
 
       if (!contentSid) {
         return sendPlainTextFollowUp({

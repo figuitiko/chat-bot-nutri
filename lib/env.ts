@@ -3,11 +3,12 @@ import { z } from "zod";
 const envSchema = z.object({
   DATABASE_URL: z.url(),
   INTERNAL_API_KEY: z.string().min(16),
-  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  NODE_ENV: z
+    .enum(["development", "test", "production"])
+    .default("development"),
   TWILIO_ACCOUNT_SID: z.string().min(1),
   TWILIO_AUTH_TOKEN: z.string().min(1),
   TWILIO_STATUS_CALLBACK_URL: z.url(),
-  TWILIO_MEDIA_FOLLOWUP_DELAY_MS: z.coerce.number().int().min(0).default(1200),
   TWILIO_VALIDATE_SIGNATURE: z
     .enum(["true", "false"])
     .optional()
