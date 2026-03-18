@@ -70,7 +70,7 @@ const templates = [
   {
     key: "training_welcome_intro",
     name: "Capacitacion - Bienvenida",
-    body: "Durante tu capacitacion recorreras 4 modulos:\n*I. Verificacion de condiciones para la preparacion de alimentos higienicamente en el expendio escolar.*\n*II. Ejecucion de practicas higienicas antes de preparar alimentos en el expendio escolar.*\n*III. Preparacion de alimentos y bebidas nutritivas de acuerdo con la normatividad para expendios escolares.*\n*IV. Proporcionar los alimentos a la comunidad escolar en el expendio.*\n\n💡 Si durante el recorrido necesitas ayuda, escribe AYUDA aqui en WhatsApp.\n\n¡Tu decides en que momento avanzar!\nPuedes dedicarle 60 minutos al dia y te recomiendo tener una libreta para anotar lo que vas aprendiendo.\n\n¿Estas lista/o para emprender este nuevo recorrido?\nEscribe: SI VAMOS",
+    body: "Durante tu capacitacion recorreras 4 modulos:\n*I. Verificacion de condiciones para la preparacion de alimentos higienicamente en el expendio escolar.*\n*II. Ejecucion de practicas higienicas antes de preparar alimentos en el expendio escolar.*\n*III. Preparacion de alimentos y bebidas nutritivas de acuerdo con la normatividad para expendios escolares.*\n*IV. Proporcionar los alimentos a la comunidad escolar en el expendio.*\n\n💡 Si durante el recorrido necesitas ayuda, escribe AYUDA aqui en WhatsApp.\n\n¡Tu decides en que momento avanzar!\nPuedes dedicarle 60 minutos al dia y te recomiendo tener una libreta para anotar lo que vas aprendiendo.\n\n¿Estas lista/o para emprender este nuevo recorrido?\nDa click en: VAMOS o escribe Vamos",
     kind: TemplateKind.TWILIO_CONTENT_TEMPLATE,
     deliveryMode: TemplateDeliveryMode.MEDIA_FIRST,
     mediaUrl: "/training-assets/nutri.jpeg",
@@ -79,14 +79,14 @@ const templates = [
   {
     key: "training_materials_intro",
     name: "Capacitacion - Materiales",
-    body: "¡Excelente!\nDe ahora en adelante te presentare videos, audios, infografias, imagenes y algunas lecturas.\nPara ver los videos deberas presionar en los enlaces de color azul cada vez que te aparezcan.\nNo olvides que luego de ver cada video siempre debes regresar aqui a este chat de WhatsApp para seguir aprendiendo.\n\nSelecciona aqui para descargar tu manual de trabajo: [PENDIENTE_LINK_MANUAL]\n\n🤖📲 ¡Antes de olvidarme!\nSi abandonas el chat por mas de 24 horas, podrias perder tus avances y tendrias que regresar a tu capacitacion desde cero.\nTe enviaremos algunos recordatorios para ayudarte a continuar.\n\nCuando estes lista/o escribe: VAMOS",
+    body: "¡Excelente!\nDe ahora en adelante te presentare videos, audios, infografias, imagenes y algunas lecturas.\nPara ver los videos deberas presionar en los enlaces de color azul cada vez que te aparezcan.\nNo olvides que luego de ver cada video siempre debes regresar aqui a este chat de WhatsApp para seguir aprendiendo.\n\nSelecciona aqui para descargar tu manual de trabajo: [PENDIENTE_LINK_MANUAL]\n\n🤖📲 ¡Antes de olvidarme!\nSi abandonas el chat por mas de 24 horas, podrias perder tus avances y tendrias que regresar a tu capacitacion desde cero.\nTe enviaremos algunos recordatorios para ayudarte a continuar.\n\nCuando estes lista/o da click en VAMOS o escribe: VAMOS",
     kind: TemplateKind.TWILIO_CONTENT_TEMPLATE,
     twilioContentSid: null,
   },
   {
     key: "training_module_1_intro",
     name: "Modulo 1 - Introduccion",
-    body: "Recuerda seguir las instrucciones unicamente de este chat.\n⭐ Comenzamos con el modulo I:\nVerificacion de condiciones para la preparacion de alimentos higienicamente en el expendio escolar.\nEncontraras 12 temas y al finalizar podras desbloquear el modulo II.\n\n➡️ Mira el video seleccionando el link de color azul y aprenderas los conceptos basicos de higiene, nutricion, centro escolar y cooperativa/tienda/cafeteria escolar.\n[PENDIENTE_LINK_VIDEO_MODULO_1]\n\nSi estas lista/o avísame escribiendo: VAMOS",
+    body: "Recuerda seguir las instrucciones unicamente de este chat.\n⭐ Comenzamos con el modulo I:\nVerificacion de condiciones para la preparacion de alimentos higienicamente en el expendio escolar.\nEncontraras 12 temas y al finalizar podras desbloquear el modulo II.\n\n➡️ Mira el video seleccionando el link de color azul y aprenderas los conceptos basicos de higiene, nutricion, centro escolar y cooperativa/tienda/cafeteria escolar.\n[PENDIENTE_LINK_VIDEO_MODULO_1]\n\nSi estas lista/o avísame dando Click en VAMOS o escribiendo: VAMOS",
     kind: TemplateKind.TWILIO_CONTENT_TEMPLATE,
     twilioContentSid: null,
   },
@@ -100,7 +100,7 @@ const templates = [
   {
     key: "training_eta_audio",
     name: "Modulo 1 - ETAs audio",
-    body: "Selecciona aqui para descargar el video: [PENDIENTE_LINK_VIDEO_ETA]\nTe recomiendo tomar nota en tu libreta para que no te pierdas de nada.\n\n👀 Te comparto el audio adjunto sobre las Enfermedades Transmitidas por los Alimentos (ETA's).\n\nCuando quieras avanzar escribe: VAMOS",
+    body: "Selecciona aqui para descargar el video: [PENDIENTE_LINK_VIDEO_ETA]\nTe recomiendo tomar nota en tu libreta para que no te pierdas de nada.\n\n👀 Te comparto el audio adjunto sobre las Enfermedades Transmitidas por los Alimentos (ETA's).\n\nCuando quieras avanzar da click en VAMOS o escribe: VAMOS",
     kind: TemplateKind.TWILIO_CONTENT_TEMPLATE,
     mediaUrl: "/training-assets/audio-nutri.mp3",
     twilioContentSid: null,
@@ -129,16 +129,17 @@ const templates = [
   {
     key: "training_hygiene_summary",
     name: "Modulo 1 - Resumen higiene",
-    body: "✅ Los equipos, utensilios y superficies en contacto con alimentos deben ser de materiales lisos, no porosos y de facil limpieza.\n✅ Deben lavarse y desinfectarse para evitar contaminacion.\n✅ Las instalaciones, incluyendo pisos, paredes y techos, deben mantenerse limpias y en buen estado.\n✅ Es obligatorio el lavado de manos del personal antes de iniciar labores, al regresar de ausencias y despues de manipular material sucio.\n✅ Los establecimientos deben contar con agua potable para la limpieza y desinfeccion.\n\nCuando quieras avanzar escribe: VAMOS",
+    body: "✅ Los equipos, utensilios y superficies en contacto con alimentos deben ser de materiales lisos, no porosos y de facil limpieza.\n✅ Deben lavarse y desinfectarse para evitar contaminacion.\n✅ Las instalaciones, incluyendo pisos, paredes y techos, deben mantenerse limpias y en buen estado.\n✅ Es obligatorio el lavado de manos del personal antes de iniciar labores, al regresar de ausencias y despues de manipular material sucio.\n✅ Los establecimientos deben contar con agua potable para la limpieza y desinfeccion.\n\nCuando quieras avanzar da click en VAMOS o da click en VAMOS o escribe: VAMOS",
     kind: TemplateKind.TWILIO_CONTENT_TEMPLATE,
     twilioContentSid: null,
   },
   {
     key: "training_cleaning_schedule",
     name: "Modulo 1 - Calendarizacion limpieza",
-    body: "➡️ Selecciona el link para ver este video y descubre como es el procedimiento de limpieza y desinfectado especifico para instalaciones, equipos y transporte.\n[PENDIENTE_LINK_VIDEO_LIMPIEZA]\n\n✅ Ahora hagamos una calendarizacion y frecuencia por area o por equipo, con la persona responsable de llevarlo a cabo.\nDescarga el formato y trabajemos:\n[PENDIENTE_LINK_FORMATO_CALENDARIZACION]\n\nCuando estes lista/o escribe: VAMOS",
+    body: "➡️ Selecciona el link para ver este video y descubre como es el procedimiento de limpieza y desinfectado especifico para instalaciones, equipos y transporte.\n[PENDIENTE_LINK_VIDEO_LIMPIEZA]\n\n✅ Ahora hagamos una calendarizacion y frecuencia por area o por equipo, con la persona responsable de llevarlo a cabo.\nDescarga el formato y trabajemos:\n[PENDIENTE_LINK_FORMATO_CALENDARIZACION]\n\nCuando estes lista/o da click en VAMOS o escribe: VAMOS",
     kind: TemplateKind.TWILIO_CONTENT_TEMPLATE,
     twilioContentSid: null,
+    mediaUrl: "/training-assets/plan_de_trabajo.docx",
   },
   {
     key: "training_drying_quiz",
