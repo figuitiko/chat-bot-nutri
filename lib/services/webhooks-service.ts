@@ -8,7 +8,13 @@ import { parseWhatsAppAddress } from "@/lib/phone";
 import { resolveInboundResponse } from "@/lib/bot/executor";
 import { upsertContactByPhone } from "@/lib/services/contacts-service";
 import {
-  closeOpenConversations,
+  dispatchDeferredCourseFollowUp,
+  getActiveCourseConversation,
+  progressCourseConversation,
+  restartCourseConversation,
+  startActiveCourseConversation,
+} from "@/lib/services/course-runtime-service";
+import {
   progressConversation,
   restartConversation,
   sendTemplateByKey,
@@ -52,7 +58,7 @@ async function upsertWebhookEvent(input: {
   });
 }
 
-async function getActiveConversation(contactId: string) {
+async function getLegacyActiveConversation(contactId: string) {
   return db.conversation.findFirst({
     where: {
       contactId,
@@ -89,6 +95,22 @@ function resolveInboundInput(payload: Record<string, string | undefined>) {
   return payload.ButtonPayload?.trim() || payload.Body?.trim() || "";
 }
 
+async function closeAllOpenConversations(contactId: string) {
+  await db.conversation.updateMany({
+    where: {
+      contactId,
+      status: "OPEN",
+    },
+    data: {
+      status: "CLOSED",
+      currentStepId: null,
+      currentCourseStepId: null,
+      currentCourseModuleId: null,
+      lastMessageAt: new Date(),
+    },
+  });
+}
+
 export async function processInboundWebhook(payload: Record<string, string | undefined>) {
   const providerMessageSid = payload.MessageSid ?? payload.SmsSid;
 
@@ -119,32 +141,63 @@ export async function processInboundWebhook(payload: Record<string, string | und
     profileName: payload.ProfileName,
   });
 
-  const activeConversation = await getActiveConversation(contact.id);
+  const activeCourseConversation = await getActiveCourseConversation(contact.id);
+  const activeLegacyConversation = activeCourseConversation
+    ? null
+    : await getLegacyActiveConversation(contact.id);
   let responseMessageSid: string | null = null;
-  let conversationId: string | null = activeConversation?.id ?? null;
-  let matchedFlowKey: string | null = null;
-  let matchedTemplateKey: string | null = null;
+  let conversationId: string | null = activeCourseConversation?.id ?? activeLegacyConversation?.id ?? null;
+  let matchedFlowKey: string | null = activeCourseConversation?.courseId ?? activeLegacyConversation?.flowId ?? null;
+  let matchedTemplateKey: string | null = activeCourseConversation?.currentCourseStepId ?? activeLegacyConversation?.currentStepId ?? null;
   let replied = false;
   const inboundInput = resolveInboundInput(payload);
   const globalCommand = resolveGlobalCommand(inboundInput);
 
   if (globalCommand === "menu") {
-    await closeOpenConversations(contact.id);
+    await closeAllOpenConversations(contact.id);
 
-    const started = await startFlowConversation({
-      contactId: contact.id,
+    try {
+      const started = await startActiveCourseConversation({
+        contactId: contact.id,
+        contactPhone,
+      });
+
+      conversationId = started.conversation.id;
+      matchedFlowKey = started.course.slug;
+      matchedTemplateKey = started.step.slug;
+      responseMessageSid = started.providerMessageSid;
+      replied = true;
+    } catch (error) {
+      if (!(error instanceof AppError) || error.code !== "ACTIVE_COURSE_NOT_FOUND") {
+        throw error;
+      }
+
+      const started = await startFlowConversation({
+        contactId: contact.id,
+        contactPhone,
+        flowKey: "welcome",
+      });
+
+      conversationId = started.conversation.id;
+      matchedFlowKey = started.flow.key;
+      matchedTemplateKey = started.step.templateKey;
+      responseMessageSid = started.providerMessageSid;
+      replied = true;
+    }
+  } else if (globalCommand === "restart" && activeCourseConversation) {
+    const restarted = await restartCourseConversation({
+      conversationId: activeCourseConversation.id,
       contactPhone,
-      flowKey: "welcome",
     });
 
-    conversationId = started.conversation.id;
-    matchedFlowKey = started.flow.key;
-    matchedTemplateKey = started.step.templateKey;
-    responseMessageSid = started.providerMessageSid;
+    conversationId = restarted.conversation.id;
+    matchedFlowKey = restarted.course.slug;
+    matchedTemplateKey = restarted.step.slug;
+    responseMessageSid = restarted.providerMessageSid;
     replied = true;
-  } else if (globalCommand === "restart" && activeConversation) {
+  } else if (globalCommand === "restart" && activeLegacyConversation) {
     const restarted = await restartConversation({
-      conversationId: activeConversation.id,
+      conversationId: activeLegacyConversation.id,
       contactPhone,
     });
 
@@ -154,19 +207,36 @@ export async function processInboundWebhook(payload: Record<string, string | und
     responseMessageSid = restarted.providerMessageSid;
     replied = true;
   } else if (globalCommand === "restart") {
-    const started = await startFlowConversation({
-      contactId: contact.id,
-      contactPhone,
-      flowKey: "welcome",
-    });
+    try {
+      const started = await startActiveCourseConversation({
+        contactId: contact.id,
+        contactPhone,
+      });
 
-    conversationId = started.conversation.id;
-    matchedFlowKey = started.flow.key;
-    matchedTemplateKey = started.step.templateKey;
-    responseMessageSid = started.providerMessageSid;
-    replied = true;
+      conversationId = started.conversation.id;
+      matchedFlowKey = started.course.slug;
+      matchedTemplateKey = started.step.slug;
+      responseMessageSid = started.providerMessageSid;
+      replied = true;
+    } catch (error) {
+      if (!(error instanceof AppError) || error.code !== "ACTIVE_COURSE_NOT_FOUND") {
+        throw error;
+      }
+
+      const started = await startFlowConversation({
+        contactId: contact.id,
+        contactPhone,
+        flowKey: "welcome",
+      });
+
+      conversationId = started.conversation.id;
+      matchedFlowKey = started.flow.key;
+      matchedTemplateKey = started.step.templateKey;
+      responseMessageSid = started.providerMessageSid;
+      replied = true;
+    }
   } else if (globalCommand === "cancel") {
-    await closeOpenConversations(contact.id);
+    await closeAllOpenConversations(contact.id);
 
     const response = await sendTemplateByKey({
       contactId: contact.id,
@@ -181,9 +251,25 @@ export async function processInboundWebhook(payload: Record<string, string | und
     conversationId = null;
   }
 
-  if (!replied && activeConversation) {
+  if (!replied && activeCourseConversation) {
+    const progressed = await progressCourseConversation({
+      conversationId: activeCourseConversation.id,
+      text: inboundInput,
+      contactPhone,
+    });
+
+    if (progressed) {
+      conversationId = progressed.conversation.id;
+      matchedFlowKey = progressed.nextStep.module.courseId;
+      matchedTemplateKey = progressed.nextStep.slug;
+      responseMessageSid = progressed.providerMessageSid;
+      replied = true;
+    }
+  }
+
+  if (!replied && activeLegacyConversation) {
     const progressed = await progressConversation({
-      conversationId: activeConversation.id,
+      conversationId: activeLegacyConversation.id,
       text: inboundInput,
       contactPhone,
     });
@@ -198,32 +284,49 @@ export async function processInboundWebhook(payload: Record<string, string | und
   }
 
   if (!replied) {
-    const match = await resolveInboundResponse(inboundInput);
-
-    if (match?.targetFlowKey) {
-      const started = await startFlowConversation({
+    try {
+      const started = await startActiveCourseConversation({
         contactId: contact.id,
         contactPhone,
-        flowKey: match.targetFlowKey,
       });
 
       conversationId = started.conversation.id;
-      matchedFlowKey = started.flow.key;
-      matchedTemplateKey = started.step.templateKey;
+      matchedFlowKey = started.course.slug;
+      matchedTemplateKey = started.step.slug;
       responseMessageSid = started.providerMessageSid;
       replied = true;
-    } else if (match?.responseTemplateKey) {
-      const response = await sendTemplateByKey({
-        contactId: contact.id,
-        contactPhone,
-        templateKey: match.responseTemplateKey,
-        conversationId,
-      });
+    } catch (error) {
+      if (!(error instanceof AppError) || error.code !== "ACTIVE_COURSE_NOT_FOUND") {
+        throw error;
+      }
 
-      matchedFlowKey = match.flowKey;
-      matchedTemplateKey = match.responseTemplateKey;
-      responseMessageSid = response.providerMessage.sid;
-      replied = true;
+      const match = await resolveInboundResponse(inboundInput);
+
+      if (match?.targetFlowKey) {
+        const started = await startFlowConversation({
+          contactId: contact.id,
+          contactPhone,
+          flowKey: match.targetFlowKey,
+        });
+
+        conversationId = started.conversation.id;
+        matchedFlowKey = started.flow.key;
+        matchedTemplateKey = started.step.templateKey;
+        responseMessageSid = started.providerMessageSid;
+        replied = true;
+      } else if (match?.responseTemplateKey) {
+        const response = await sendTemplateByKey({
+          contactId: contact.id,
+          contactPhone,
+          templateKey: match.responseTemplateKey,
+          conversationId,
+        });
+
+        matchedFlowKey = match.flowKey;
+        matchedTemplateKey = match.responseTemplateKey;
+        responseMessageSid = response.providerMessage.sid;
+        replied = true;
+      }
     }
   }
 
@@ -394,6 +497,32 @@ export async function processStatusCallback(payload: Record<string, string | und
 
       const followUpType = String(deferredFollowUp.type ?? "");
       const templateKey = String(deferredFollowUp.templateKey ?? "");
+
+      if (followUpType === "course-step") {
+        const courseStepId =
+          typeof deferredFollowUp.courseStepId === "string"
+            ? deferredFollowUp.courseStepId
+            : undefined;
+
+        if (courseStepId) {
+          await dispatchDeferredCourseFollowUp({
+            contactId: message.contactId,
+            contactPhone: parseWhatsAppAddress(payload.To),
+            courseStepId,
+            conversationId: message.conversationId,
+            variables:
+              deferredFollowUp.variables &&
+              typeof deferredFollowUp.variables === "object" &&
+              !Array.isArray(deferredFollowUp.variables)
+                ? Object.fromEntries(
+                    Object.entries(deferredFollowUp.variables as Record<string, unknown>).map(
+                      ([key, value]) => [key, String(value ?? "")],
+                    ),
+                  )
+                : undefined,
+          });
+        }
+      }
 
       if (followUpType === "template" && templateKey) {
         const stepId =

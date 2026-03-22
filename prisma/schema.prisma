@@ -28,6 +28,28 @@ enum TemplateDeliveryMode {
   MEDIA_FIRST
 }
 
+enum CourseStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum CourseStepType {
+  CONTENT
+  QUESTION
+  RESULT
+  HANDOFF
+  SYSTEM
+}
+
+enum AssetKind {
+  IMAGE
+  AUDIO
+  VIDEO
+  DOCUMENT
+  OTHER
+}
+
 enum ConversationStatus {
   OPEN
   CLOSED
@@ -93,6 +115,120 @@ model Contact {
   updatedAt      DateTime       @updatedAt
   conversations  Conversation[]
   messages       Message[]
+}
+
+model Asset {
+  id          String        @id @default(cuid())
+  kind        AssetKind
+  url         String        @unique
+  pathname    String
+  contentType String?
+  sizeBytes   Int?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  courses     Course[]      @relation("CourseCoverAsset")
+  modules     CourseModule[] @relation("ModuleIntroAsset")
+  steps       CourseStep[]  @relation("StepMediaAsset")
+}
+
+model Course {
+  id              String         @id @default(cuid())
+  slug            String         @unique
+  name            String
+  description     String?
+  status          CourseStatus   @default(DRAFT)
+  isActive        Boolean        @default(false)
+  activatedAt     DateTime?
+  archivedAt      DateTime?
+  coverAssetId    String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  coverAsset      Asset?         @relation("CourseCoverAsset", fields: [coverAssetId], references: [id], onDelete: SetNull)
+  modules         CourseModule[]
+  conversations   Conversation[]
+
+  @@index([status, isActive])
+}
+
+model CourseModule {
+  id             String         @id @default(cuid())
+  courseId       String
+  slug           String
+  title          String
+  summary        String?
+  sortOrder      Int
+  introAssetId   String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  course         Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  introAsset     Asset?         @relation("ModuleIntroAsset", fields: [introAssetId], references: [id], onDelete: SetNull)
+  steps          CourseStep[]
+  conversations  Conversation[]
+
+  @@unique([courseId, slug])
+  @@index([courseId, sortOrder])
+}
+
+model CourseStep {
+  id                  String               @id @default(cuid())
+  moduleId            String
+  slug                String
+  title               String
+  stepType            CourseStepType       @default(CONTENT)
+  sortOrder           Int
+  body                String
+  kind                TemplateKind         @default(TEXT)
+  deliveryMode        TemplateDeliveryMode @default(STANDARD)
+  renderMode          FlowStepRenderMode   @default(TEXT)
+  inputType           FlowStepInputType    @default(CHOICE)
+  mediaAssetId        String?
+  mediaUrl            String?
+  captureKey          String?
+  assessmentKey       String?
+  correctAnswer       String?
+  scoreWeight         Int?
+  isAssessmentResult  Boolean              @default(false)
+  isTerminal          Boolean              @default(false)
+  isActive            Boolean              @default(true)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  module              CourseModule         @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  mediaAsset          Asset?               @relation("StepMediaAsset", fields: [mediaAssetId], references: [id], onDelete: SetNull)
+  transitions         CourseTransition[]   @relation("CourseTransitionSource")
+  incomingTransitions CourseTransition[]   @relation("CourseTransitionTarget")
+  conversations       Conversation[]       @relation("ConversationCurrentCourseStep")
+
+  @@unique([moduleId, slug])
+  @@index([moduleId, sortOrder])
+}
+
+model CourseTransition {
+  id           String           @id @default(cuid())
+  stepId        String
+  nextStepId    String?
+  matchType     BotRuleMatchType
+  pattern       String
+  displayLabel  String?
+  displayHint   String?
+  outputValue   String?
+  priority      Int             @default(100)
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  step          CourseStep      @relation("CourseTransitionSource", fields: [stepId], references: [id], onDelete: Cascade)
+  nextStep      CourseStep?     @relation("CourseTransitionTarget", fields: [nextStepId], references: [id], onDelete: SetNull)
+
+  @@index([stepId, priority])
+}
+
+model AdminUser {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  passwordHash  String
+  name          String
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 
 model BotFlow {
@@ -189,6 +325,9 @@ model Conversation {
   id            String             @id @default(cuid())
   contactId     String
   flowId        String?
+  courseId      String?
+  currentCourseModuleId String?
+  currentCourseStepId String?
   currentStepId String?
   contextData   Json?
   status        ConversationStatus @default(OPEN)
@@ -197,11 +336,16 @@ model Conversation {
   updatedAt     DateTime           @updatedAt
   contact       Contact            @relation(fields: [contactId], references: [id], onDelete: Cascade)
   flow          BotFlow?           @relation(fields: [flowId], references: [id], onDelete: SetNull)
+  course        Course?            @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  currentCourseModule CourseModule? @relation(fields: [currentCourseModuleId], references: [id], onDelete: SetNull)
+  currentCourseStep CourseStep?    @relation("ConversationCurrentCourseStep", fields: [currentCourseStepId], references: [id], onDelete: SetNull)
   currentStep   BotFlowStep?       @relation("ConversationCurrentStep", fields: [currentStepId], references: [id], onDelete: SetNull)
   messages      Message[]
 
   @@unique([contactId, flowId])
+  @@unique([contactId, courseId])
   @@index([contactId])
+  @@index([courseId])
 }
 
 model Message {

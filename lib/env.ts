@@ -1,13 +1,19 @@
 import { z } from "zod";
 
 const envSchema = z.object({
+  ADMIN_EMAIL: z.email().optional(),
+  ADMIN_NAME: z.string().min(1).default("Admin"),
+  ADMIN_PASSWORD: z.string().min(8).optional(),
+  BLOB_READ_WRITE_TOKEN: z.string().optional(),
   DATABASE_URL: z.url(),
   INTERNAL_API_KEY: z.string().min(16),
   NODE_ENV: z
     .enum(["development", "test", "production"])
     .default("development"),
+  SESSION_SECRET: z.string().min(32).optional(),
   TWILIO_ACCOUNT_SID: z.string().min(1),
   TWILIO_AUTH_TOKEN: z.string().min(1),
+  TWILIO_MEDIA_FOLLOWUP_DELAY_MS: z.coerce.number().int().min(0).default(0),
   TWILIO_STATUS_CALLBACK_URL: z.url(),
   TWILIO_VALIDATE_SIGNATURE: z
     .enum(["true", "false"])

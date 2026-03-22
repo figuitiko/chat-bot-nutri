@@ -1,7 +1,10 @@
 import "dotenv/config";
 
 import { PrismaPg } from "@prisma/adapter-pg";
+import { hash } from "bcryptjs";
 import {
+  CourseStatus,
+  CourseStepType,
   BotRuleMatchType,
   FlowStepRenderMode,
   FlowStepInputType,
@@ -64,6 +67,13 @@ type SeedFlow = {
   rules: SeedRule[];
   steps: SeedStep[];
   transitions: SeedTransition[];
+};
+
+type SeedCourseModule = {
+  slug: string;
+  title: string;
+  summary: string;
+  stepKeys: string[];
 };
 
 const templates = [
@@ -981,7 +991,72 @@ const flowDefinitions: SeedFlow[] = [
   },
 ];
 
+const nutriCourseModules: SeedCourseModule[] = [
+  {
+    slug: "bienvenida",
+    title: "Bienvenida y materiales",
+    summary: "Onboarding inicial y materiales de trabajo para arrancar la capacitacion.",
+    stepKeys: ["training_welcome_intro", "training_materials_intro"],
+  },
+  {
+    slug: "modulo-1",
+    title: "Modulo 1 - Verificacion de condiciones",
+    summary:
+      "Contenido guiado, actividades, preguntas y evaluacion del modulo 1 de nutricion.",
+    stepKeys: [
+      "training_module_1_intro",
+      "training_cafeteria_experience",
+      "training_eta_audio",
+      "training_eta_activity",
+      "training_supply_chain",
+      "training_regulation_intro",
+      "training_hygiene_summary",
+      "training_cleaning_schedule",
+      "training_drying_quiz",
+      "training_drying_quiz_correct",
+      "training_drying_quiz_incorrect",
+      "training_temperature_control",
+      "training_services_infographic",
+      "training_evaluation_intro",
+      "training_evaluation_q1",
+      "training_evaluation_q2",
+      "training_evaluation_q3",
+      "training_evaluation_q4",
+      "training_evaluation_result",
+    ],
+  },
+  {
+    slug: "modulo-2",
+    title: "Modulo 2 - Ejecucion de practicas higienicas",
+    summary: "Punto de salida actual para el modulo 2 del curso Nutri.",
+    stepKeys: ["training_module_2_intro"],
+  },
+];
+
+function getTransitionDisplayLabel(pattern: string, outputValue?: string) {
+  if (outputValue?.trim()) {
+    return /^\d+$/.test(pattern.trim()) ? pattern.trim() : outputValue.trim();
+  }
+
+  return pattern.trim().replace(/\b\w/g, (segment) => segment.toUpperCase());
+}
+
+function getTransitionDisplayHint(pattern: string, outputValue?: string) {
+  if (!outputValue?.trim()) {
+    return undefined;
+  }
+
+  return /^\d+$/.test(pattern.trim()) ? outputValue.trim() : undefined;
+}
+
 async function main() {
+  const templateByKey = new Map(templates.map((template) => [template.key, template]));
+  const welcomeFlow = flowDefinitions.find((flow) => flow.key === "welcome");
+
+  if (!welcomeFlow) {
+    throw new Error("The welcome flow definition is required to seed the Nutri course.");
+  }
+
   for (const template of templates) {
     await prisma.messageTemplate.upsert({
       where: { key: template.key },
@@ -1162,6 +1237,225 @@ async function main() {
         keyHash,
       },
       update: {
+        isActive: true,
+      },
+    });
+  }
+
+  const adminEmail = process.env.ADMIN_EMAIL;
+  const adminPassword = process.env.ADMIN_PASSWORD;
+
+  if (adminEmail && adminPassword) {
+    await prisma.adminUser.upsert({
+      where: { email: adminEmail },
+      create: {
+        email: adminEmail,
+        name: process.env.ADMIN_NAME ?? "Admin",
+        passwordHash: await hash(adminPassword, 10),
+      },
+      update: {
+        name: process.env.ADMIN_NAME ?? "Admin",
+        passwordHash: await hash(adminPassword, 10),
+        isActive: true,
+      },
+    });
+  }
+
+  const seededAssets = [
+    {
+      url: "public://training-assets/nutri.jpeg",
+      pathname: "/training-assets/nutri.jpeg",
+      kind: "IMAGE" as const,
+      contentType: "image/jpeg",
+    },
+    {
+      url: "public://training-assets/audio-nutri.mp3",
+      pathname: "/training-assets/audio-nutri.mp3",
+      kind: "AUDIO" as const,
+      contentType: "audio/mpeg",
+    },
+    {
+      url: "public://training-assets/modulo-1-eta-agentes.png",
+      pathname: "/training-assets/modulo-1-eta-agentes.png",
+      kind: "IMAGE" as const,
+      contentType: "image/png",
+    },
+  ];
+
+  for (const asset of seededAssets) {
+    await prisma.asset.upsert({
+      where: { url: asset.url },
+      create: asset,
+      update: asset,
+    });
+  }
+
+  const coverAsset = await prisma.asset.findUnique({
+    where: { url: "public://training-assets/nutri.jpeg" },
+    select: { id: true },
+  });
+
+  const course = await prisma.course.upsert({
+    where: { slug: "nutri" },
+    create: {
+      slug: "nutri",
+      name: "Nutri",
+      description:
+        "Capacitacion administrable para el bot de WhatsApp enfocada en nutricion y expendios escolares.",
+      status: CourseStatus.ACTIVE,
+      isActive: true,
+      activatedAt: new Date(),
+      coverAssetId: coverAsset?.id,
+    },
+    update: {
+      name: "Nutri",
+      description:
+        "Capacitacion administrable para el bot de WhatsApp enfocada en nutricion y expendios escolares.",
+      status: CourseStatus.ACTIVE,
+      isActive: true,
+      activatedAt: new Date(),
+      coverAssetId: coverAsset?.id,
+      archivedAt: null,
+    },
+  });
+
+  await prisma.course.updateMany({
+    where: {
+      id: { not: course.id },
+      isActive: true,
+    },
+    data: {
+      isActive: false,
+      activatedAt: null,
+      status: CourseStatus.DRAFT,
+    },
+  });
+
+  await prisma.courseTransition.deleteMany({
+    where: {
+      step: {
+        module: {
+          courseId: course.id,
+        },
+      },
+    },
+  });
+  await prisma.courseStep.deleteMany({
+    where: {
+      module: {
+        courseId: course.id,
+      },
+    },
+  });
+  await prisma.courseModule.deleteMany({
+    where: {
+      courseId: course.id,
+    },
+  });
+
+  const moduleIdBySlug = new Map<string, string>();
+  for (const [index, moduleSeed] of nutriCourseModules.entries()) {
+    const introAssetPath =
+      moduleSeed.slug === "bienvenida" ? "/training-assets/nutri.jpeg" : null;
+    const introAsset = introAssetPath
+      ? await prisma.asset.findUnique({
+          where: { url: `public:${introAssetPath}`.replace("public:/", "public://") },
+          select: { id: true },
+        })
+      : null;
+
+    const courseModule = await prisma.courseModule.create({
+      data: {
+        courseId: course.id,
+        slug: moduleSeed.slug,
+        title: moduleSeed.title,
+        summary: moduleSeed.summary,
+        sortOrder: index + 1,
+        introAssetId: introAsset?.id,
+      },
+    });
+    moduleIdBySlug.set(moduleSeed.slug, courseModule.id);
+  }
+
+  const stepIdByKey = new Map<string, string>();
+  for (const moduleSeed of nutriCourseModules) {
+    const moduleId = moduleIdBySlug.get(moduleSeed.slug);
+
+    if (!moduleId) {
+      throw new Error(`Missing module mapping for ${moduleSeed.slug}`);
+    }
+
+    for (const [index, stepKey] of moduleSeed.stepKeys.entries()) {
+      const flowStep = welcomeFlow.steps.find((step) => step.key === stepKey);
+      const template = templateByKey.get(stepKey);
+
+      if (!flowStep || !template) {
+        throw new Error(`Missing course seed step or template for ${stepKey}`);
+      }
+
+      const mediaAsset = template.mediaUrl
+        ? await prisma.asset.findUnique({
+            where: {
+              url: `public://${template.mediaUrl.replace(/^\//, "")}`,
+            },
+            select: { id: true },
+          })
+        : null;
+
+      const courseStep = await prisma.courseStep.create({
+        data: {
+          moduleId,
+          slug: flowStep.key,
+          title: flowStep.name,
+          stepType: flowStep.isAssessmentResult
+            ? CourseStepType.RESULT
+            : flowStep.correctAnswer
+              ? CourseStepType.QUESTION
+              : flowStep.isTerminal
+                ? CourseStepType.SYSTEM
+                : CourseStepType.CONTENT,
+          sortOrder: index + 1,
+          body: template.body,
+          kind: template.kind,
+          deliveryMode: template.deliveryMode ?? TemplateDeliveryMode.STANDARD,
+          renderMode: flowStep.renderMode ?? FlowStepRenderMode.TEXT,
+          inputType: flowStep.inputType,
+          mediaAssetId: mediaAsset?.id,
+          mediaUrl: template.mediaUrl ?? null,
+          captureKey: flowStep.captureKey ?? null,
+          assessmentKey: flowStep.assessmentKey ?? null,
+          correctAnswer: flowStep.correctAnswer ?? null,
+          scoreWeight: flowStep.scoreWeight ?? null,
+          isAssessmentResult: flowStep.isAssessmentResult ?? false,
+          isTerminal: flowStep.isTerminal,
+          isActive: true,
+        },
+      });
+
+      stepIdByKey.set(flowStep.key, courseStep.id);
+    }
+  }
+
+  for (const transition of welcomeFlow.transitions) {
+    const sourceStepId = stepIdByKey.get(transition.stepKey);
+    const nextStepId = stepIdByKey.get(transition.nextStepKey);
+
+    if (!sourceStepId || !nextStepId) {
+      throw new Error(
+        `Missing course step mapping for transition ${transition.stepKey} -> ${transition.nextStepKey}`,
+      );
+    }
+
+    await prisma.courseTransition.create({
+      data: {
+        stepId: sourceStepId,
+        nextStepId,
+        matchType: transition.matchType,
+        pattern: transition.pattern,
+        displayLabel: getTransitionDisplayLabel(transition.pattern, transition.outputValue),
+        displayHint: getTransitionDisplayHint(transition.pattern, transition.outputValue),
+        outputValue: transition.outputValue ?? null,
+        priority: transition.priority,
         isActive: true,
       },
     });
