@@ -4,21 +4,29 @@ import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { AppError } from "@/lib/http";
 import { normalizeText } from "@/lib/bot/state-machine";
-import { parseWhatsAppAddress } from "@/lib/phone";
 import { resolveInboundResponse } from "@/lib/bot/executor";
+import { parseWhatsAppAddress } from "@/lib/phone";
 import { upsertContactByPhone } from "@/lib/services/contacts-service";
 import {
+  findOpenConversation,
+  getConversationAccessState,
+  hasActiveEnrollmentForCourse,
+  handleSecretSubmission,
+  promptCourseSelectionAgain,
+  resolveSelectedCourseId,
+  startAccessConversation,
+} from "@/lib/services/access-service";
+import {
   dispatchDeferredCourseFollowUp,
-  getActiveCourseConversation,
   progressCourseConversation,
   restartCourseConversation,
-  startActiveCourseConversation,
+  startSelectedCourseConversation,
 } from "@/lib/services/course-runtime-service";
 import {
   progressConversation,
   restartConversation,
-  sendTemplateByKey,
   startFlowConversation,
+  sendTemplateByKey,
 } from "@/lib/services/flows-service";
 import { mapTwilioStatus, storeInboundMessage } from "@/lib/services/messages-service";
 
@@ -54,21 +62,6 @@ async function upsertWebhookEvent(input: {
       source: input.source,
       payload: input.payload,
       status: input.status,
-    },
-  });
-}
-
-async function getLegacyActiveConversation(contactId: string) {
-  return db.conversation.findFirst({
-    where: {
-      contactId,
-      status: "OPEN",
-      currentStepId: {
-        not: null,
-      },
-    },
-    orderBy: {
-      updatedAt: "desc",
     },
   });
 }
@@ -111,21 +104,86 @@ async function closeAllOpenConversations(contactId: string) {
   });
 }
 
-export async function processInboundWebhook(payload: Record<string, string | undefined>) {
-  const providerMessageSid = payload.MessageSid ?? payload.SmsSid;
+type InboundContact = Awaited<ReturnType<typeof upsertContactByPhone>>;
+type OpenConversation = Awaited<ReturnType<typeof findOpenConversation>>;
+type GlobalCommand = ReturnType<typeof resolveGlobalCommand>;
 
-  if (providerMessageSid) {
-    const existingMessage = await db.message.findUnique({
-      where: { providerMessageSid },
-      select: { id: true },
-    });
+type InboundRoutingContext = {
+  contact: InboundContact;
+  contactPhone: string;
+  inboundInput: string;
+  openConversation: OpenConversation;
+  activeCourseConversation: OpenConversation;
+  activeLegacyConversation: OpenConversation;
+  accessState: ReturnType<typeof getConversationAccessState>;
+  globalCommand: GlobalCommand;
+};
 
-    if (existingMessage) {
-      logger.info("webhook.inbound.duplicate", { providerMessageSid });
-      return { duplicate: true, replied: false };
-    }
+type InboundRoutingState = {
+  replied: boolean;
+  conversationId: string | null;
+  matchedFlowKey: string | null;
+  matchedTemplateKey: string | null;
+  responseMessageSid: string | null;
+};
+
+function createRoutingState(openConversation: OpenConversation): InboundRoutingState {
+  return {
+    replied: false,
+    conversationId: openConversation?.id ?? null,
+    matchedFlowKey: openConversation?.courseId ?? openConversation?.flowId ?? null,
+    matchedTemplateKey:
+      openConversation?.currentCourseStepId ?? openConversation?.currentStepId ?? null,
+    responseMessageSid: null,
+  };
+}
+
+function createRoutingContext(input: {
+  contact: InboundContact;
+  contactPhone: string;
+  inboundInput: string;
+  openConversation: OpenConversation;
+}): InboundRoutingContext {
+  return {
+    contact: input.contact,
+    contactPhone: input.contactPhone,
+    inboundInput: input.inboundInput,
+    openConversation: input.openConversation,
+    activeCourseConversation:
+      input.openConversation?.courseId && input.openConversation.currentCourseStepId
+        ? input.openConversation
+        : null,
+    activeLegacyConversation:
+      input.openConversation?.flowId && input.openConversation.currentStepId
+        ? input.openConversation
+        : null,
+    accessState: getConversationAccessState(input.openConversation?.contextData),
+    globalCommand: resolveGlobalCommand(input.inboundInput),
+  };
+}
+
+async function ensureInboundMessageIsNotDuplicate(providerMessageSid?: string) {
+  if (!providerMessageSid) {
+    return false;
   }
 
+  const existingMessage = await db.message.findUnique({
+    where: { providerMessageSid },
+    select: { id: true },
+  });
+
+  if (!existingMessage) {
+    return false;
+  }
+
+  logger.info("webhook.inbound.duplicate", { providerMessageSid });
+  return true;
+}
+
+async function registerInboundEvent(
+  payload: Record<string, string | undefined>,
+  providerMessageSid?: string,
+) {
   const eventId = providerMessageSid ? `inbound:${providerMessageSid}` : undefined;
   await upsertWebhookEvent({
     source: "TWILIO_INBOUND",
@@ -134,6 +192,10 @@ export async function processInboundWebhook(payload: Record<string, string | und
     status: "RECEIVED",
   });
 
+  return eventId;
+}
+
+async function resolveInboundContact(payload: Record<string, string | undefined>) {
   const contactPhone = parseWhatsAppAddress(payload.From);
   const contact = await upsertContactByPhone({
     phone: contactPhone,
@@ -141,206 +203,290 @@ export async function processInboundWebhook(payload: Record<string, string | und
     profileName: payload.ProfileName,
   });
 
-  const activeCourseConversation = await getActiveCourseConversation(contact.id);
-  const activeLegacyConversation = activeCourseConversation
-    ? null
-    : await getLegacyActiveConversation(contact.id);
-  let responseMessageSid: string | null = null;
-  let conversationId: string | null = activeCourseConversation?.id ?? activeLegacyConversation?.id ?? null;
-  let matchedFlowKey: string | null = activeCourseConversation?.courseId ?? activeLegacyConversation?.flowId ?? null;
-  let matchedTemplateKey: string | null = activeCourseConversation?.currentCourseStepId ?? activeLegacyConversation?.currentStepId ?? null;
-  let replied = false;
-  const inboundInput = resolveInboundInput(payload);
-  const globalCommand = resolveGlobalCommand(inboundInput);
+  return { contact, contactPhone };
+}
 
-  if (globalCommand === "menu") {
-    await closeAllOpenConversations(contact.id);
-
-    try {
-      const started = await startActiveCourseConversation({
-        contactId: contact.id,
-        contactPhone,
-      });
-
-      conversationId = started.conversation.id;
-      matchedFlowKey = started.course.slug;
-      matchedTemplateKey = started.step.slug;
-      responseMessageSid = started.providerMessageSid;
-      replied = true;
-    } catch (error) {
-      if (!(error instanceof AppError) || error.code !== "ACTIVE_COURSE_NOT_FOUND") {
-        throw error;
-      }
-
-      const started = await startFlowConversation({
-        contactId: contact.id,
-        contactPhone,
-        flowKey: "welcome",
-      });
-
-      conversationId = started.conversation.id;
-      matchedFlowKey = started.flow.key;
-      matchedTemplateKey = started.step.templateKey;
-      responseMessageSid = started.providerMessageSid;
-      replied = true;
-    }
-  } else if (globalCommand === "restart" && activeCourseConversation) {
-    const restarted = await restartCourseConversation({
-      conversationId: activeCourseConversation.id,
-      contactPhone,
-    });
-
-    conversationId = restarted.conversation.id;
-    matchedFlowKey = restarted.course.slug;
-    matchedTemplateKey = restarted.step.slug;
-    responseMessageSid = restarted.providerMessageSid;
-    replied = true;
-  } else if (globalCommand === "restart" && activeLegacyConversation) {
-    const restarted = await restartConversation({
-      conversationId: activeLegacyConversation.id,
-      contactPhone,
-    });
-
-    conversationId = restarted.conversation.id;
-    matchedFlowKey = restarted.flow.key;
-    matchedTemplateKey = restarted.step.templateKey;
-    responseMessageSid = restarted.providerMessageSid;
-    replied = true;
-  } else if (globalCommand === "restart") {
-    try {
-      const started = await startActiveCourseConversation({
-        contactId: contact.id,
-        contactPhone,
-      });
-
-      conversationId = started.conversation.id;
-      matchedFlowKey = started.course.slug;
-      matchedTemplateKey = started.step.slug;
-      responseMessageSid = started.providerMessageSid;
-      replied = true;
-    } catch (error) {
-      if (!(error instanceof AppError) || error.code !== "ACTIVE_COURSE_NOT_FOUND") {
-        throw error;
-      }
-
-      const started = await startFlowConversation({
-        contactId: contact.id,
-        contactPhone,
-        flowKey: "welcome",
-      });
-
-      conversationId = started.conversation.id;
-      matchedFlowKey = started.flow.key;
-      matchedTemplateKey = started.step.templateKey;
-      responseMessageSid = started.providerMessageSid;
-      replied = true;
-    }
-  } else if (globalCommand === "cancel") {
-    await closeAllOpenConversations(contact.id);
-
-    const response = await sendTemplateByKey({
-      contactId: contact.id,
-      contactPhone,
-      templateKey: "conversation_cancelled",
-      conversationId,
-    });
-
-    matchedTemplateKey = "conversation_cancelled";
-    responseMessageSid = response.providerMessage.sid;
-    replied = true;
-    conversationId = null;
-  }
-
-  if (!replied && activeCourseConversation) {
-    const progressed = await progressCourseConversation({
-      conversationId: activeCourseConversation.id,
-      text: inboundInput,
-      contactPhone,
-    });
-
-    if (progressed) {
-      conversationId = progressed.conversation.id;
-      matchedFlowKey = progressed.nextStep.module.courseId;
-      matchedTemplateKey = progressed.nextStep.slug;
-      responseMessageSid = progressed.providerMessageSid;
-      replied = true;
-    }
-  }
-
-  if (!replied && activeLegacyConversation) {
-    const progressed = await progressConversation({
-      conversationId: activeLegacyConversation.id,
-      text: inboundInput,
-      contactPhone,
-    });
-
-    if (progressed) {
-      conversationId = progressed.conversation.id;
-      matchedFlowKey = progressed.nextStep.flowId;
-      matchedTemplateKey = progressed.nextStep.templateKey;
-      responseMessageSid = progressed.providerMessageSid;
-      replied = true;
-    }
-  }
-
-  if (!replied) {
-    try {
-      const started = await startActiveCourseConversation({
-        contactId: contact.id,
-        contactPhone,
-      });
-
-      conversationId = started.conversation.id;
-      matchedFlowKey = started.course.slug;
-      matchedTemplateKey = started.step.slug;
-      responseMessageSid = started.providerMessageSid;
-      replied = true;
-    } catch (error) {
-      if (!(error instanceof AppError) || error.code !== "ACTIVE_COURSE_NOT_FOUND") {
-        throw error;
-      }
-
-      const match = await resolveInboundResponse(inboundInput);
-
-      if (match?.targetFlowKey) {
-        const started = await startFlowConversation({
-          contactId: contact.id,
-          contactPhone,
-          flowKey: match.targetFlowKey,
-        });
-
-        conversationId = started.conversation.id;
-        matchedFlowKey = started.flow.key;
-        matchedTemplateKey = started.step.templateKey;
-        responseMessageSid = started.providerMessageSid;
-        replied = true;
-      } else if (match?.responseTemplateKey) {
-        const response = await sendTemplateByKey({
-          contactId: contact.id,
-          contactPhone,
-          templateKey: match.responseTemplateKey,
-          conversationId,
-        });
-
-        matchedFlowKey = match.flowKey;
-        matchedTemplateKey = match.responseTemplateKey;
-        responseMessageSid = response.providerMessage.sid;
-        replied = true;
-      }
-    }
-  }
-
-  const inboundMessage = await storeInboundMessage({
-    body: payload.Body ?? "",
-    contactId: contact.id,
-    conversationId,
-    providerMessageSid,
-    rawPayload: payload,
+async function startAccessPrompt(
+  context: InboundRoutingContext,
+  state: InboundRoutingState,
+) {
+  const started = await startAccessConversation({
+    contactId: context.contact.id,
+    contactPhone: context.contactPhone,
   });
 
-  if (!replied && conversationId) {
+  state.conversationId = started.conversation.id;
+  state.matchedFlowKey = null;
+  state.matchedTemplateKey = "auth_secret_prompt";
+  state.responseMessageSid = started.providerMessageSid;
+  state.replied = true;
+}
+
+async function handleGlobalCommand(
+  context: InboundRoutingContext,
+  state: InboundRoutingState,
+) {
+  if (context.globalCommand === "menu") {
+    await closeAllOpenConversations(context.contact.id);
+    await startAccessPrompt(context, state);
+    return;
+  }
+
+  if (context.globalCommand === "restart" && context.activeCourseConversation) {
+    const hasEnrollment = await hasActiveEnrollmentForCourse({
+      contactId: context.contact.id,
+      courseId: context.activeCourseConversation.courseId!,
+    });
+
+    if (!hasEnrollment) {
+      await closeAllOpenConversations(context.contact.id);
+      await startAccessPrompt(context, state);
+      return;
+    }
+
+    const restarted = await restartCourseConversation({
+      conversationId: context.activeCourseConversation.id,
+      contactPhone: context.contactPhone,
+    });
+
+    state.conversationId = restarted.conversation.id;
+    state.matchedFlowKey = restarted.course.slug;
+    state.matchedTemplateKey = restarted.step.slug;
+    state.responseMessageSid = restarted.providerMessageSid;
+    state.replied = true;
+    return;
+  }
+
+  if (context.globalCommand === "restart" && context.activeLegacyConversation) {
+    const restarted = await restartConversation({
+      conversationId: context.activeLegacyConversation.id,
+      contactPhone: context.contactPhone,
+    });
+
+    state.conversationId = restarted.conversation.id;
+    state.matchedFlowKey = restarted.flow.key;
+    state.matchedTemplateKey = restarted.step.templateKey;
+    state.responseMessageSid = restarted.providerMessageSid;
+    state.replied = true;
+    return;
+  }
+
+  if (context.globalCommand === "restart") {
+    await closeAllOpenConversations(context.contact.id);
+    await startAccessPrompt(context, state);
+    return;
+  }
+
+  if (context.globalCommand === "cancel") {
+    await closeAllOpenConversations(context.contact.id);
+
+    const response = await sendTemplateByKey({
+      contactId: context.contact.id,
+      contactPhone: context.contactPhone,
+      templateKey: "conversation_cancelled",
+      conversationId: state.conversationId,
+    });
+
+    state.matchedTemplateKey = "conversation_cancelled";
+    state.responseMessageSid = response.providerMessage.sid;
+    state.conversationId = null;
+    state.replied = true;
+  }
+}
+
+async function handleAccessRouting(
+  context: InboundRoutingContext,
+  state: InboundRoutingState,
+) {
+  if (context.accessState === "awaiting_secret" && context.openConversation) {
+    const result = await handleSecretSubmission({
+      conversationId: context.openConversation.id,
+      contactId: context.contact.id,
+      contactPhone: context.contactPhone,
+      secret: context.inboundInput,
+    });
+
+    state.conversationId = result.conversationId;
+    state.responseMessageSid = result.providerMessageSid;
+    state.matchedTemplateKey =
+      result.selectedCourseId ? "course_selected" : "auth_secret_submission";
+    state.replied = true;
+
+    if (result.selectedCourseId) {
+      const started = await startSelectedCourseConversation({
+        contactId: context.contact.id,
+        contactPhone: context.contactPhone,
+        courseId: result.selectedCourseId,
+        conversationId: result.conversationId,
+      });
+
+      state.conversationId = started.conversation.id;
+      state.matchedFlowKey = started.course.slug;
+      state.matchedTemplateKey = started.step.slug;
+      state.responseMessageSid = started.providerMessageSid;
+    }
+  }
+
+  if (state.replied || context.accessState !== "awaiting_course_selection" || !context.openConversation) {
+    return;
+  }
+
+  const selectedCourseId = await resolveSelectedCourseId({
+    contactId: context.contact.id,
+    text: context.inboundInput,
+  });
+
+  if (selectedCourseId) {
+    const started = await startSelectedCourseConversation({
+      contactId: context.contact.id,
+      contactPhone: context.contactPhone,
+      courseId: selectedCourseId,
+      conversationId: context.openConversation.id,
+    });
+
+    state.conversationId = started.conversation.id;
+    state.matchedFlowKey = started.course.slug;
+    state.matchedTemplateKey = started.step.slug;
+    state.responseMessageSid = started.providerMessageSid;
+  } else {
+    const response = await promptCourseSelectionAgain({
+      contactId: context.contact.id,
+      contactPhone: context.contactPhone,
+      conversationId: context.openConversation.id,
+    });
+
+    state.conversationId = context.openConversation.id;
+    state.matchedTemplateKey = "auth_course_selection";
+    state.responseMessageSid = response?.sid ?? null;
+  }
+
+  state.replied = true;
+}
+
+async function handleCourseEngine(
+  context: InboundRoutingContext,
+  state: InboundRoutingState,
+) {
+  if (!context.activeCourseConversation) {
+    return;
+  }
+
+  const hasEnrollment = await hasActiveEnrollmentForCourse({
+    contactId: context.contact.id,
+    courseId: context.activeCourseConversation.courseId!,
+  });
+
+  if (!hasEnrollment) {
     await db.conversation.update({
-      where: { id: conversationId },
+      where: { id: context.activeCourseConversation.id },
+      data: {
+        status: "CLOSED",
+        currentCourseModuleId: null,
+        currentCourseStepId: null,
+        lastMessageAt: new Date(),
+      },
+    });
+
+    await startAccessPrompt(context, state);
+    return;
+  }
+
+  const progressed = await progressCourseConversation({
+    conversationId: context.activeCourseConversation.id,
+    text: context.inboundInput,
+    contactPhone: context.contactPhone,
+  });
+
+  if (!progressed) {
+    return;
+  }
+
+  state.conversationId = progressed.conversation.id;
+  state.matchedFlowKey = progressed.nextStep.module.courseId;
+  state.matchedTemplateKey = progressed.nextStep.slug;
+  state.responseMessageSid = progressed.providerMessageSid;
+  state.replied = true;
+}
+
+async function handleLegacyEngine(
+  context: InboundRoutingContext,
+  state: InboundRoutingState,
+) {
+  if (!context.activeLegacyConversation) {
+    return;
+  }
+
+  const progressed = await progressConversation({
+    conversationId: context.activeLegacyConversation.id,
+    text: context.inboundInput,
+    contactPhone: context.contactPhone,
+  });
+
+  if (!progressed) {
+    return;
+  }
+
+  state.conversationId = progressed.conversation.id;
+  state.matchedFlowKey = progressed.nextStep.flowId;
+  state.matchedTemplateKey = progressed.nextStep.templateKey;
+  state.responseMessageSid = progressed.providerMessageSid;
+  state.replied = true;
+}
+
+async function handleRuleRouting(
+  context: InboundRoutingContext,
+  state: InboundRoutingState,
+) {
+  const match = await resolveInboundResponse(context.inboundInput);
+
+  if (match?.targetFlowKey) {
+    const started = await startFlowConversation({
+      contactId: context.contact.id,
+      contactPhone: context.contactPhone,
+      flowKey: match.targetFlowKey,
+    });
+
+    state.conversationId = started.conversation.id;
+    state.matchedFlowKey = started.flow.key;
+    state.matchedTemplateKey = started.step.templateKey;
+    state.responseMessageSid = started.providerMessageSid;
+    state.replied = true;
+    return;
+  }
+
+  if (match?.responseTemplateKey) {
+    const response = await sendTemplateByKey({
+      contactId: context.contact.id,
+      contactPhone: context.contactPhone,
+      templateKey: match.responseTemplateKey,
+      conversationId: state.conversationId,
+    });
+
+    state.matchedFlowKey = match.flowKey;
+    state.matchedTemplateKey = match.responseTemplateKey;
+    state.responseMessageSid = response.providerMessage.sid;
+    state.replied = true;
+  }
+}
+
+async function finalizeInboundWebhook(input: {
+  payload: Record<string, string | undefined>;
+  providerMessageSid?: string;
+  eventId?: string;
+  contactId: string;
+  state: InboundRoutingState;
+}) {
+  const inboundMessage = await storeInboundMessage({
+    body: input.payload.Body ?? "",
+    contactId: input.contactId,
+    conversationId: input.state.conversationId,
+    providerMessageSid: input.providerMessageSid,
+    rawPayload: input.payload,
+  });
+
+  if (!input.state.replied && input.state.conversationId) {
+    await db.conversation.update({
+      where: { id: input.state.conversationId },
       data: {
         status: "ESCALATED",
       },
@@ -349,18 +495,18 @@ export async function processInboundWebhook(payload: Record<string, string | und
 
   await Promise.all([
     db.contact.update({
-      where: { id: contact.id },
+      where: { id: input.contactId },
       data: {
         lastInboundAt: new Date(),
-        ...(replied ? { lastOutboundAt: new Date() } : {}),
+        ...(input.state.replied ? { lastOutboundAt: new Date() } : {}),
       },
     }),
-    eventId
+    input.eventId
       ? db.webhookEvent.update({
           where: {
             source_eventId: {
               source: "TWILIO_INBOUND",
-              eventId,
+              eventId: input.eventId,
             },
           },
           data: {
@@ -371,14 +517,61 @@ export async function processInboundWebhook(payload: Record<string, string | und
       : Promise.resolve(),
   ]);
 
+  return inboundMessage;
+}
+
+export async function processInboundWebhook(payload: Record<string, string | undefined>) {
+  const providerMessageSid = payload.MessageSid ?? payload.SmsSid;
+
+  if (await ensureInboundMessageIsNotDuplicate(providerMessageSid)) {
+    return { duplicate: true, replied: false };
+  }
+
+  const eventId = await registerInboundEvent(payload, providerMessageSid);
+  const { contact, contactPhone } = await resolveInboundContact(payload);
+  const inboundInput = resolveInboundInput(payload);
+  const openConversation = await findOpenConversation(contact.id);
+  const context = createRoutingContext({
+    contact,
+    contactPhone,
+    inboundInput,
+    openConversation,
+  });
+  const state = createRoutingState(openConversation);
+
+  await handleGlobalCommand(context, state);
+  if (!state.replied) {
+    await handleAccessRouting(context, state);
+  }
+  if (!state.replied) {
+    await handleCourseEngine(context, state);
+  }
+  if (!state.replied) {
+    await handleLegacyEngine(context, state);
+  }
+  if (!state.replied) {
+    await handleRuleRouting(context, state);
+  }
+  if (!state.replied && !context.openConversation) {
+    await startAccessPrompt(context, state);
+  }
+
+  const inboundMessage = await finalizeInboundWebhook({
+    payload,
+    providerMessageSid,
+    eventId,
+    contactId: contact.id,
+    state,
+  });
+
   return {
     duplicate: false,
-    replied,
+    replied: state.replied,
     contactId: contact.id,
     inboundMessageId: inboundMessage.id,
-    matchedFlowKey,
-    matchedTemplateKey,
-    responseMessageSid,
+    matchedFlowKey: state.matchedFlowKey,
+    matchedTemplateKey: state.matchedTemplateKey,
+    responseMessageSid: state.responseMessageSid,
   };
 }
 

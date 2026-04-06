@@ -995,7 +995,8 @@ const nutriCourseModules: SeedCourseModule[] = [
   {
     slug: "bienvenida",
     title: "Bienvenida y materiales",
-    summary: "Onboarding inicial y materiales de trabajo para arrancar la capacitacion.",
+    summary:
+      "Onboarding inicial y materiales de trabajo para arrancar la capacitacion.",
     stepKeys: ["training_welcome_intro", "training_materials_intro"],
   },
   {
@@ -1050,11 +1051,15 @@ function getTransitionDisplayHint(pattern: string, outputValue?: string) {
 }
 
 async function main() {
-  const templateByKey = new Map(templates.map((template) => [template.key, template]));
+  const templateByKey = new Map(
+    templates.map((template) => [template.key, template]),
+  );
   const welcomeFlow = flowDefinitions.find((flow) => flow.key === "welcome");
 
   if (!welcomeFlow) {
-    throw new Error("The welcome flow definition is required to seed the Nutri course.");
+    throw new Error(
+      "The welcome flow definition is required to seed the Nutri course.",
+    );
   }
 
   for (const template of templates) {
@@ -1261,6 +1266,23 @@ async function main() {
     });
   }
 
+  const sampleContact = await prisma.contact.upsert({
+    where: { phone: "+5212462062041" },
+    create: {
+      phone: "+5212462062041",
+      name: "Estudiante Nutri",
+      profileName: "Estudiante Nutri",
+      locale: "es-MX",
+      isOptedIn: true,
+    },
+    update: {
+      name: "Estudiante Nutri",
+      profileName: "Estudiante Nutri",
+      locale: "es-MX",
+      isOptedIn: true,
+    },
+  });
+
   const seededAssets = [
     {
       url: "public://training-assets/nutri.jpeg",
@@ -1359,7 +1381,9 @@ async function main() {
       moduleSeed.slug === "bienvenida" ? "/training-assets/nutri.jpeg" : null;
     const introAsset = introAssetPath
       ? await prisma.asset.findUnique({
-          where: { url: `public:${introAssetPath}`.replace("public:/", "public://") },
+          where: {
+            url: `public:${introAssetPath}`.replace("public:/", "public://"),
+          },
           select: { id: true },
         })
       : null;
@@ -1452,14 +1476,57 @@ async function main() {
         nextStepId,
         matchType: transition.matchType,
         pattern: transition.pattern,
-        displayLabel: getTransitionDisplayLabel(transition.pattern, transition.outputValue),
-        displayHint: getTransitionDisplayHint(transition.pattern, transition.outputValue),
+        displayLabel: getTransitionDisplayLabel(
+          transition.pattern,
+          transition.outputValue,
+        ),
+        displayHint: getTransitionDisplayHint(
+          transition.pattern,
+          transition.outputValue,
+        ),
         outputValue: transition.outputValue ?? null,
         priority: transition.priority,
         isActive: true,
       },
     });
   }
+
+  await prisma.contactAccessCredential.upsert({
+    where: {
+      contactId: sampleContact.id,
+    },
+    create: {
+      contactId: sampleContact.id,
+      secretHash: await hash("NUTRI2026", 10),
+      isActive: true,
+      failedAttempts: 0,
+    },
+    update: {
+      secretHash: await hash("NUTRI2026", 10),
+      isActive: true,
+      failedAttempts: 0,
+      lockedUntil: null,
+      lastVerifiedAt: null,
+    },
+  });
+
+  await prisma.courseEnrollment.upsert({
+    where: {
+      contactId_courseId: {
+        contactId: sampleContact.id,
+        courseId: course.id,
+      },
+    },
+    create: {
+      contactId: sampleContact.id,
+      courseId: course.id,
+      isActive: true,
+    },
+    update: {
+      isActive: true,
+      completedAt: null,
+    },
+  });
 }
 
 main()

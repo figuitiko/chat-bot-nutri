@@ -113,8 +113,23 @@ model Contact {
   lastOutboundAt DateTime?
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
+  accessCredential ContactAccessCredential?
   conversations  Conversation[]
+  enrollments    CourseEnrollment[]
   messages       Message[]
+}
+
+model ContactAccessCredential {
+  id             String   @id @default(cuid())
+  contactId      String   @unique
+  secretHash     String
+  isActive       Boolean  @default(true)
+  failedAttempts Int      @default(0)
+  lockedUntil    DateTime?
+  lastVerifiedAt DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  contact        Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
 }
 
 model Asset {
@@ -144,10 +159,29 @@ model Course {
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
   coverAsset      Asset?         @relation("CourseCoverAsset", fields: [coverAssetId], references: [id], onDelete: SetNull)
+  enrollments     CourseEnrollment[]
   modules         CourseModule[]
   conversations   Conversation[]
+  selectedInConversations Conversation[] @relation("ConversationSelectedCourse")
 
   @@index([status, isActive])
+}
+
+model CourseEnrollment {
+  id          String   @id @default(cuid())
+  contactId   String
+  courseId    String
+  isActive    Boolean  @default(true)
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  contact     Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([contactId, courseId])
+  @@index([contactId, isActive])
+  @@index([courseId, isActive])
 }
 
 model CourseModule {
@@ -326,6 +360,7 @@ model Conversation {
   contactId     String
   flowId        String?
   courseId      String?
+  selectedCourseId String?
   currentCourseModuleId String?
   currentCourseStepId String?
   currentStepId String?
@@ -337,6 +372,7 @@ model Conversation {
   contact       Contact            @relation(fields: [contactId], references: [id], onDelete: Cascade)
   flow          BotFlow?           @relation(fields: [flowId], references: [id], onDelete: SetNull)
   course        Course?            @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  selectedCourse Course?           @relation("ConversationSelectedCourse", fields: [selectedCourseId], references: [id], onDelete: SetNull)
   currentCourseModule CourseModule? @relation(fields: [currentCourseModuleId], references: [id], onDelete: SetNull)
   currentCourseStep CourseStep?    @relation("ConversationCurrentCourseStep", fields: [currentCourseStepId], references: [id], onDelete: SetNull)
   currentStep   BotFlowStep?       @relation("ConversationCurrentStep", fields: [currentStepId], references: [id], onDelete: SetNull)
@@ -346,6 +382,7 @@ model Conversation {
   @@unique([contactId, courseId])
   @@index([contactId])
   @@index([courseId])
+  @@index([selectedCourseId])
 }
 
 model Message {

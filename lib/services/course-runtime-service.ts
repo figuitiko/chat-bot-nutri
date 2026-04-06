@@ -331,6 +331,48 @@ async function getActiveCourseEntryStep() {
   return { course, entryModule, entryStep };
 }
 
+async function getCourseEntryStep(courseId: string) {
+  const course = await db.course.findUnique({
+    where: { id: courseId },
+    include: {
+      modules: {
+        orderBy: { sortOrder: "asc" },
+        include: {
+          steps: {
+            where: { isActive: true },
+            orderBy: { sortOrder: "asc" },
+            include: {
+              module: {
+                select: {
+                  id: true,
+                  courseId: true,
+                },
+              },
+              transitions: {
+                where: { isActive: true },
+                orderBy: { priority: "asc" },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!course) {
+    throw new AppError("COURSE_NOT_FOUND", "The selected course does not exist.", 404);
+  }
+
+  const entryModule = course.modules[0];
+  const entryStep = entryModule?.steps[0];
+
+  if (!entryModule || !entryStep) {
+    throw new AppError("COURSE_NOT_EXECUTABLE", "The selected course does not have an entry step.", 422);
+  }
+
+  return { course, entryModule, entryStep };
+}
+
 async function sendMediaAttachment(input: {
   contactId: string;
   contactPhone: string;
@@ -487,38 +529,59 @@ export async function startActiveCourseConversation(input: {
   contactPhone: string;
 }) {
   const { course, entryModule, entryStep } = await getActiveCourseEntryStep();
+  return startCourseConversationFromEntry({
+    contactId: input.contactId,
+    contactPhone: input.contactPhone,
+    course,
+    entryModule,
+    entryStep,
+  });
+}
+
+async function startCourseConversationFromEntry(input: {
+  contactId: string;
+  contactPhone: string;
+  course: Awaited<ReturnType<typeof getActiveCourseEntryStep>>["course"];
+  entryModule: Awaited<ReturnType<typeof getActiveCourseEntryStep>>["entryModule"];
+  entryStep: Awaited<ReturnType<typeof getActiveCourseEntryStep>>["entryStep"];
+}) {
   const contextData = mergeConversationContext(null, {});
   const conversation = await db.conversation.upsert({
     where: {
       contactId_courseId: {
         contactId: input.contactId,
-        courseId: course.id,
+        courseId: input.course.id,
       },
     },
     create: {
       contactId: input.contactId,
-      courseId: course.id,
-      currentCourseModuleId: entryModule.id,
-      currentCourseStepId: entryStep.isTerminal ? null : entryStep.id,
+      courseId: input.course.id,
+      selectedCourseId: input.course.id,
+      currentCourseModuleId: input.entryModule.id,
+      currentCourseStepId: input.entryStep.isTerminal ? null : input.entryStep.id,
       contextData,
-      status: entryStep.isTerminal ? "CLOSED" : "OPEN",
+      status: input.entryStep.isTerminal ? "CLOSED" : "OPEN",
       lastMessageAt: new Date(),
     },
     update: {
-      currentCourseModuleId: entryModule.id,
-      currentCourseStepId: entryStep.isTerminal ? null : entryStep.id,
+      selectedCourseId: input.course.id,
+      currentCourseModuleId: input.entryModule.id,
+      currentCourseStepId: input.entryStep.isTerminal ? null : input.entryStep.id,
       contextData,
-      status: entryStep.isTerminal ? "CLOSED" : "OPEN",
+      status: input.entryStep.isTerminal ? "CLOSED" : "OPEN",
       lastMessageAt: new Date(),
     },
   });
 
-  const variables = await buildConversationVariables(readConversationContext(contextData), entryStep);
+  const variables = await buildConversationVariables(
+    readConversationContext(contextData),
+    input.entryStep,
+  );
   const result = await sendCourseStep({
     contactId: input.contactId,
     contactPhone: input.contactPhone,
     conversationId: conversation.id,
-    step: entryStep,
+    step: input.entryStep,
     variables,
   });
 
@@ -529,11 +592,34 @@ export async function startActiveCourseConversation(input: {
 
   return {
     conversation,
-    course,
-    module: entryModule,
-    step: entryStep,
+    course: input.course,
+    module: input.entryModule,
+    step: input.entryStep,
     providerMessageSid: result.providerMessage.sid,
   };
+}
+
+export async function startSelectedCourseConversation(input: {
+  contactId: string;
+  contactPhone: string;
+  courseId: string;
+  conversationId?: string | null;
+}) {
+  const { course, entryModule, entryStep } = await getCourseEntryStep(input.courseId);
+
+  if (input.conversationId) {
+    await db.conversation.delete({
+      where: { id: input.conversationId },
+    }).catch(() => undefined);
+  }
+
+  return startCourseConversationFromEntry({
+    contactId: input.contactId,
+    contactPhone: input.contactPhone,
+    course,
+    entryModule,
+    entryStep,
+  });
 }
 
 export async function getActiveCourseConversation(contactId: string) {
@@ -613,6 +699,7 @@ export async function progressCourseConversation(input: {
     where: { id: conversation.id },
     data: {
       courseId: nextStep.module.courseId,
+      selectedCourseId: nextStep.module.courseId,
       currentCourseModuleId: nextStep.module.id,
       currentCourseStepId: nextStep.isTerminal ? null : nextStep.id,
       contextData,
@@ -708,6 +795,7 @@ export async function restartCourseConversation(input: {
   const updatedConversation = await db.conversation.update({
     where: { id: input.conversationId },
     data: {
+      selectedCourseId: course.id,
       currentCourseModuleId: entryModule.id,
       currentCourseStepId: entryStep.isTerminal ? null : entryStep.id,
       contextData,

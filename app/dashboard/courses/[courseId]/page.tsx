@@ -8,6 +8,7 @@ import {
   updateCourseAction,
   uploadAssetAction,
 } from "@/app/dashboard/actions";
+import { EmptyState } from "@/components/dashboard/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -71,44 +72,58 @@ export default async function CourseEditorPage({
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6 lg:grid-cols-[1fr_320px]">
-          <form action={updateCourseAction} className="grid gap-4">
-            <input type="hidden" name="id" value={course.id} />
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="name">Nombre</Label>
-                <Input id="name" name="name" defaultValue={course.name} required />
+          <div className="grid gap-4">
+            <form action={updateCourseAction} className="grid gap-4" aria-describedby="course-editor-help">
+              <input type="hidden" name="id" value={course.id} />
+              <p id="course-editor-help" className="text-sm text-slate-500">
+                Edita esta version en borrador o activa el curso cuando todos los modulos, pasos y evaluaciones esten completos.
+              </p>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Nombre</Label>
+                  <Input id="name" name="name" defaultValue={course.name} required />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="slug">Slug</Label>
+                  <Input id="slug" name="slug" defaultValue={course.slug} required />
+                </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="slug">Slug</Label>
-                <Input id="slug" name="slug" defaultValue={course.slug} required />
+                <Label htmlFor="description">Descripcion</Label>
+                <Textarea id="description" name="description" defaultValue={course.description ?? ""} />
               </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="description">Descripcion</Label>
-              <Textarea id="description" name="description" defaultValue={course.description ?? ""} />
-            </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="status">Estado</Label>
-                <Select id="status" name="status" defaultValue={course.status}>
-                  <option value="DRAFT">DRAFT</option>
-                  <option value="ACTIVE">ACTIVE</option>
-                  <option value="ARCHIVED">ARCHIVED</option>
-                </Select>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="status">Estado</Label>
+                  <Select id="status" name="status" defaultValue={course.status}>
+                    <option value="DRAFT">DRAFT</option>
+                    <option value="ACTIVE">ACTIVE</option>
+                    <option value="ARCHIVED">ARCHIVED</option>
+                  </Select>
+                </div>
+                <div className="flex items-end gap-2">
+                  <Button type="submit">Guardar curso</Button>
+                </div>
               </div>
-              <div className="flex items-end gap-2">
-                <Button type="submit">Guardar curso</Button>
-                {!course.isActive ? (
-                  <form action={activateCourseAction}>
-                    <input type="hidden" name="courseId" value={course.id} />
-                    <Button type="submit" variant="secondary">
-                      Activar para nuevas conversaciones
-                    </Button>
-                  </form>
-                ) : null}
-              </div>
-            </div>
-          </form>
+            </form>
+
+            {!course.isActive ? (
+              <form action={activateCourseAction} className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4">
+                <input type="hidden" name="courseId" value={course.id} />
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p className="font-medium text-slate-950">Publicacion controlada</p>
+                    <p className="text-sm text-slate-600">
+                      Solo un curso puede quedar activo para nuevas conversaciones. Los learners ya iniciados permanecen en su curso actual.
+                    </p>
+                  </div>
+                  <Button type="submit" variant="secondary">
+                    Activar para nuevas conversaciones
+                  </Button>
+                </div>
+              </form>
+            ) : null}
+          </div>
 
           <div className="space-y-3 rounded-2xl bg-slate-50 p-4">
             <p className="text-sm font-medium text-slate-700">Portada del curso</p>
@@ -142,6 +157,13 @@ export default async function CourseEditorPage({
             <CardDescription>Crea y actualiza el mapa del curso.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
+            {course.modules.length === 0 ? (
+              <EmptyState
+                eyebrow="Modulos"
+                title="Este curso aun no tiene modulos"
+                description="Empieza creando el primer modulo para luego agregar pasos, transiciones, assets y evaluaciones."
+              />
+            ) : null}
             {course.modules.map((module) => (
               <div key={module.id} className="rounded-2xl border border-slate-200 p-4">
                 <form action={createOrUpdateModuleAction} className="grid gap-3">
@@ -185,12 +207,22 @@ export default async function CourseEditorPage({
                 <CardDescription>{module.summary ?? "Sin resumen"}</CardDescription>
               </CardHeader>
               <CardContent className="grid gap-4">
+                {module.steps.length === 0 ? (
+                  <EmptyState
+                    eyebrow="Pasos"
+                    title="Este modulo aun no tiene pasos"
+                    description="Agrega un paso inicial y luego conecta transiciones para construir la conversacion del modulo."
+                  />
+                ) : null}
                 {module.steps.map((step) => (
                   <div key={step.id} className="rounded-2xl border border-slate-200 p-4">
-                    <form action={createOrUpdateStepAction} className="grid gap-3">
+                    <form action={createOrUpdateStepAction} className="grid gap-3" aria-describedby={`${step.id}-step-help`}>
                       <input type="hidden" name="courseId" value={course.id} />
                       <input type="hidden" name="moduleId" value={module.id} />
                       <input type="hidden" name="stepId" value={step.id} />
+                      <p id={`${step.id}-step-help`} className="text-sm text-slate-500">
+                        Ajusta el tipo de paso, su forma de entrega y como debe capturar respuestas o puntajes.
+                      </p>
                       <div className="grid gap-3 md:grid-cols-2">
                         <Input name="title" defaultValue={step.title} />
                         <Input name="slug" defaultValue={step.slug} />
@@ -232,7 +264,8 @@ export default async function CourseEditorPage({
                         <Input name="correctAnswer" defaultValue={step.correctAnswer ?? ""} placeholder="correctAnswer" />
                         <Input name="scoreWeight" defaultValue={step.scoreWeight ?? ""} placeholder="scoreWeight" />
                       </div>
-                      <div className="flex flex-wrap gap-4 text-sm text-slate-600">
+                      <fieldset className="flex flex-wrap gap-4 text-sm text-slate-600">
+                        <legend className="sr-only">Configuraciones especiales del paso</legend>
                         <label className="flex items-center gap-2">
                           <input defaultChecked={step.isAssessmentResult} name="isAssessmentResult" type="checkbox" />
                           Resultado de evaluacion
@@ -241,7 +274,7 @@ export default async function CourseEditorPage({
                           <input defaultChecked={step.isTerminal} name="isTerminal" type="checkbox" />
                           Paso terminal
                         </label>
-                      </div>
+                      </fieldset>
                       <div className="flex flex-wrap gap-2">
                         <Button type="submit" variant="outline">
                           Guardar paso
@@ -314,9 +347,12 @@ export default async function CourseEditorPage({
 
                 <Separator />
 
-                <form action={createOrUpdateStepAction} className="grid gap-3 rounded-2xl bg-slate-50 p-4">
+                <form action={createOrUpdateStepAction} className="grid gap-3 rounded-2xl bg-slate-50 p-4" aria-describedby={`${module.id}-new-step-help`}>
                   <input type="hidden" name="courseId" value={course.id} />
                   <input type="hidden" name="moduleId" value={module.id} />
+                  <p id={`${module.id}-new-step-help`} className="text-sm text-slate-500">
+                    Los pasos nuevos se agregan al final del modulo y luego puedes enlazarlos con transiciones.
+                  </p>
                   <div className="grid gap-3 md:grid-cols-2">
                     <Input name="title" placeholder="Nuevo paso" />
                     <Input name="slug" placeholder="nuevo-paso" />

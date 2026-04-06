@@ -19,6 +19,9 @@ import { requireAdminSession } from "@/lib/admin-auth";
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
 import { AppError } from "@/lib/http";
+import { normalizePhone } from "@/lib/phone";
+import { upsertContactByPhone } from "@/lib/services/contacts-service";
+import { setContactAccessSecret } from "@/lib/services/access-service";
 import { slugify } from "@/lib/utils";
 
 const courseInputSchema = z.object({
@@ -70,11 +73,35 @@ const transitionInputSchema = z.object({
   priority: z.coerce.number().int().min(1).default(100),
 });
 
+const contactInputSchema = z.object({
+  phone: z.string().min(8),
+  name: z.string().trim().optional(),
+  profileName: z.string().trim().optional(),
+  locale: z.string().trim().default("es-MX"),
+});
+
+const secretInputSchema = z.object({
+  contactId: z.string().min(1),
+  secret: z.string().trim().min(6),
+});
+
+const enrollmentInputSchema = z.object({
+  contactId: z.string().min(1),
+  courseId: z.string().min(1),
+});
+
 function redirectToCourse(courseId: string) {
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/courses");
   revalidatePath(`/dashboard/courses/${courseId}`);
   redirect(`/dashboard/courses/${courseId}`);
+}
+
+function redirectToContact(contactId: string) {
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/contacts");
+  revalidatePath(`/dashboard/contacts/${contactId}`);
+  redirect(`/dashboard/contacts/${contactId}`);
 }
 
 async function validateCourseActivation(courseId: string) {
@@ -457,4 +484,99 @@ export async function uploadAssetAction(formData: FormData) {
   }
 
   redirectToCourse(courseId);
+}
+
+export async function createContactAction(formData: FormData) {
+  await requireAdminSession();
+
+  const input = contactInputSchema.parse({
+    phone: formData.get("phone"),
+    name: formData.get("name"),
+    profileName: formData.get("profileName"),
+    locale: formData.get("locale") || "es-MX",
+  });
+
+  const contact = await upsertContactByPhone(input);
+  redirectToContact(contact.id);
+}
+
+export async function updateContactAction(formData: FormData) {
+  await requireAdminSession();
+
+  const contactId = String(formData.get("contactId") ?? "");
+  const input = contactInputSchema.parse({
+    phone: formData.get("phone"),
+    name: formData.get("name"),
+    profileName: formData.get("profileName"),
+    locale: formData.get("locale") || "es-MX",
+  });
+
+  await db.contact.update({
+    where: { id: contactId },
+    data: {
+      phone: normalizePhone(input.phone),
+      name: input.name || null,
+      profileName: input.profileName || null,
+      locale: input.locale,
+    },
+  });
+
+  redirectToContact(contactId);
+}
+
+export async function setContactSecretAction(formData: FormData) {
+  await requireAdminSession();
+
+  const input = secretInputSchema.parse({
+    contactId: formData.get("contactId"),
+    secret: formData.get("secret"),
+  });
+
+  await setContactAccessSecret(input);
+  redirectToContact(input.contactId);
+}
+
+export async function assignCourseEnrollmentAction(formData: FormData) {
+  await requireAdminSession();
+
+  const input = enrollmentInputSchema.parse({
+    contactId: formData.get("contactId"),
+    courseId: formData.get("courseId"),
+  });
+
+  await db.courseEnrollment.upsert({
+    where: {
+      contactId_courseId: {
+        contactId: input.contactId,
+        courseId: input.courseId,
+      },
+    },
+    create: {
+      contactId: input.contactId,
+      courseId: input.courseId,
+      isActive: true,
+    },
+    update: {
+      isActive: true,
+      completedAt: null,
+    },
+  });
+
+  redirectToContact(input.contactId);
+}
+
+export async function revokeCourseEnrollmentAction(formData: FormData) {
+  await requireAdminSession();
+
+  const enrollmentId = String(formData.get("enrollmentId") ?? "");
+  const contactId = String(formData.get("contactId") ?? "");
+
+  await db.courseEnrollment.update({
+    where: { id: enrollmentId },
+    data: {
+      isActive: false,
+    },
+  });
+
+  redirectToContact(contactId);
 }
