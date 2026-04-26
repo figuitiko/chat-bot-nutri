@@ -1,0 +1,77 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  getCourseEditorNavigation,
+  type CourseEditorModuleBase,
+} from "@/lib/dashboard/course-editor-navigation";
+
+const modules: CourseEditorModuleBase[] = [
+  {
+    id: "m1",
+    slug: "modulo-1",
+    title: "Modulo 1",
+    steps: [
+      { id: "s1", slug: "bienvenida", title: "Bienvenida" },
+      { id: "s2", slug: "intro", title: "Intro" },
+    ],
+  },
+  {
+    id: "m2",
+    slug: "modulo-2",
+    title: "Modulo 2",
+    steps: [
+      { id: "s3", slug: "tema-1", title: "Tema 1" },
+    ],
+  },
+  {
+    id: "m3",
+    slug: "modulo-3",
+    title: "Modulo 3",
+    steps: [],
+  },
+];
+
+describe("getCourseEditorNavigation", () => {
+  it("selects the first module and step by default", () => {
+    const navigation = getCourseEditorNavigation(modules, {});
+
+    expect(navigation.selectedModule?.id).toBe("m1");
+    expect(navigation.selectedStep?.id).toBe("s1");
+    expect(navigation.selectedModuleIndex).toBe(0);
+    expect(navigation.selectedStepIndex).toBe(0);
+    expect(navigation.totalSteps).toBe(3);
+  });
+
+  it("honors module and step query params when they exist", () => {
+    const navigation = getCourseEditorNavigation(modules, {
+      module: "modulo-2",
+      step: "tema-1",
+    });
+
+    expect(navigation.selectedModule?.id).toBe("m2");
+    expect(navigation.selectedStep?.id).toBe("s3");
+    expect(navigation.previousStep?.step.id).toBe("s2");
+    expect(navigation.nextStep).toBeNull();
+  });
+
+  it("falls back to the first step of the selected module when the requested step does not exist", () => {
+    const navigation = getCourseEditorNavigation(modules, {
+      module: "modulo-1",
+      step: "paso-inexistente",
+    });
+
+    expect(navigation.selectedModule?.id).toBe("m1");
+    expect(navigation.selectedStep?.id).toBe("s1");
+  });
+
+  it("returns no selected step when the chosen module has no steps", () => {
+    const navigation = getCourseEditorNavigation(modules, {
+      module: "modulo-3",
+    });
+
+    expect(navigation.selectedModule?.id).toBe("m3");
+    expect(navigation.selectedStep).toBeNull();
+    expect(navigation.previousStep).toBeNull();
+    expect(navigation.nextStep).toBeNull();
+  });
+});
