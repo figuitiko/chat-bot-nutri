@@ -14,14 +14,31 @@ function getTemplateBlock(key: string) {
 }
 
 describe("nutri seed delivery compaction", () => {
-  it("uses plain text for long instructional checkpoints", () => {
-    expect(getTemplateBlock("training_materials_intro")).toContain("kind: TemplateKind.TEXT");
-    expect(getTemplateBlock("training_hygiene_summary")).toContain("kind: TemplateKind.TEXT");
-    expect(getTemplateBlock("training_module_2_quiz_intro")).toContain("kind: TemplateKind.TEXT");
-    expect(getTemplateBlock("training_evaluation_intro")).toContain("kind: TemplateKind.TEXT");
+  it("keeps interactive CTA templates where the learner should still see a button", () => {
+    expect(getTemplateBlock("training_module_1_intro")).toContain(
+      "kind: TemplateKind.TWILIO_CONTENT_TEMPLATE",
+    );
+    expect(getTemplateBlock("training_module_1_intro")).toContain(
+      'mediaUrl: "/training-assets/modulo-1-conceptos-basicos.png"',
+    );
   });
 
-  it("uses LINK_ONLY for resource-heavy audio, video, and manual steps", () => {
+  it("keeps interactive checkpoints where the learner should tap instead of type", () => {
+    expect(getTemplateBlock("training_materials_intro")).toContain(
+      "kind: TemplateKind.TWILIO_CONTENT_TEMPLATE",
+    );
+    expect(getTemplateBlock("training_hygiene_summary")).toContain(
+      "kind: TemplateKind.TWILIO_CONTENT_TEMPLATE",
+    );
+    expect(getTemplateBlock("training_module_2_quiz_intro")).toContain(
+      "kind: TemplateKind.TWILIO_CONTENT_TEMPLATE",
+    );
+    expect(getTemplateBlock("training_evaluation_intro")).toContain(
+      "kind: TemplateKind.TWILIO_CONTENT_TEMPLATE",
+    );
+  });
+
+  it("uses LINK_ONLY for resource-heavy steps without losing interactive buttons", () => {
     for (const key of [
       "training_food_handling_audio",
       "training_cleaning_audio",
@@ -37,6 +54,7 @@ describe("nutri seed delivery compaction", () => {
       "training_module_3_menu_video",
       "training_module_4_intro",
     ]) {
+      expect(getTemplateBlock(key)).toContain("kind: TemplateKind.TWILIO_CONTENT_TEMPLATE");
       expect(getTemplateBlock(key)).toContain("deliveryMode: TemplateDeliveryMode.LINK_ONLY");
     }
   });
