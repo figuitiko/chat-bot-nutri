@@ -58,4 +58,18 @@ describe("nutri seed delivery compaction", () => {
       expect(getTemplateBlock(key)).toContain("deliveryMode: TemplateDeliveryMode.LINK_ONLY");
     }
   });
+
+  it("keeps button-based CTA steps interactive even when they include images", () => {
+    for (const key of [
+      "training_eta_activity",
+      "training_module_2_waste_infographic",
+      "training_module_2_pests_infographic",
+      "training_module_2_fruit_wash_infographic",
+      "training_module_3_intro",
+      "training_module_3_healthy_eating",
+      "training_module_4_survey_intro",
+    ]) {
+      expect(getTemplateBlock(key)).toContain("kind: TemplateKind.TWILIO_CONTENT_TEMPLATE");
+    }
+  });
 });
