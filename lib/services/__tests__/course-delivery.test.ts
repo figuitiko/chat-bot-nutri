@@ -1,3 +1,4 @@
+import { TemplateDeliveryMode, TemplateKind } from "@/generated/prisma/client";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -11,7 +12,7 @@ describe("buildStepBodyWithDeliveryMode", () => {
     expect(
       buildStepBodyWithDeliveryMode({
         body: "Escucha este audio.",
-        deliveryMode: "LINK_ONLY",
+        deliveryMode: TemplateDeliveryMode.LINK_ONLY,
         resolvedMediaUrl: "https://example.com/audio.mp3",
       }),
     ).toContain("https://example.com/audio.mp3");
@@ -23,7 +24,7 @@ describe("buildStepBodyWithDeliveryMode", () => {
     expect(
       buildStepBodyWithDeliveryMode({
         body,
-        deliveryMode: "LINK_ONLY",
+        deliveryMode: TemplateDeliveryMode.LINK_ONLY,
         resolvedMediaUrl: "https://example.com/audio.mp3",
       }),
     ).toBe(body);
@@ -34,8 +35,8 @@ describe("estimateOutboundMessagesForStep", () => {
   it("returns 2 for MEDIA_FIRST steps with media", () => {
     expect(
       estimateOutboundMessagesForStep({
-        deliveryMode: "MEDIA_FIRST",
-        kind: "TEXT",
+        deliveryMode: TemplateDeliveryMode.MEDIA_FIRST,
+        kind: TemplateKind.TEXT,
         hasMedia: true,
       }),
     ).toBe(2);
@@ -44,8 +45,8 @@ describe("estimateOutboundMessagesForStep", () => {
   it("returns 2 for interactive STANDARD steps with media", () => {
     expect(
       estimateOutboundMessagesForStep({
-        deliveryMode: "STANDARD",
-        kind: "TWILIO_CONTENT_TEMPLATE",
+        deliveryMode: TemplateDeliveryMode.STANDARD,
+        kind: TemplateKind.TWILIO_CONTENT_TEMPLATE,
         hasMedia: true,
       }),
     ).toBe(2);
@@ -54,8 +55,8 @@ describe("estimateOutboundMessagesForStep", () => {
   it("returns 1 for LINK_ONLY steps with media", () => {
     expect(
       estimateOutboundMessagesForStep({
-        deliveryMode: "LINK_ONLY",
-        kind: "TWILIO_CONTENT_TEMPLATE",
+        deliveryMode: TemplateDeliveryMode.LINK_ONLY,
+        kind: TemplateKind.TWILIO_CONTENT_TEMPLATE,
         hasMedia: true,
       }),
     ).toBe(1);

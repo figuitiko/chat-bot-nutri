@@ -20,6 +20,7 @@ import { Select } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { getCourseEditorNavigation } from "@/lib/dashboard/course-editor-navigation";
+import { estimateOutboundMessagesForStep } from "@/lib/services/course-delivery";
 import { db } from "@/lib/db";
 import { cn } from "@/lib/utils";
 
@@ -81,6 +82,14 @@ export default async function CourseEditorPage({
   }
 
   const allSteps = course.modules.flatMap((module) => module.steps);
+  const stepsWithMedia = allSteps.filter((step) => step.mediaUrl || step.mediaAssetId).length;
+  const stepsWithDoubleDeliveryRisk = allSteps.filter((step) =>
+    estimateOutboundMessagesForStep({
+      deliveryMode: step.deliveryMode,
+      kind: step.kind,
+      hasMedia: Boolean(step.mediaUrl || step.mediaAssetId),
+    }) > 1,
+  ).length;
   const navigation = getCourseEditorNavigation(course.modules, currentSearchParams);
   const selectedModule = navigation.selectedModule;
   const selectedStep = navigation.selectedStep;
@@ -199,6 +208,16 @@ export default async function CourseEditorPage({
                   <p className="text-slate-500">Pasos</p>
                 </div>
               </div>
+              <div className="grid grid-cols-2 gap-3 rounded-2xl bg-amber-50 p-3 text-center text-sm">
+                <div>
+                  <p className="font-semibold text-slate-950">{stepsWithMedia}</p>
+                  <p className="text-slate-500">Con media</p>
+                </div>
+                <div>
+                  <p className="font-semibold text-slate-950">{stepsWithDoubleDeliveryRisk}</p>
+                  <p className="text-slate-500">Riesgo doble</p>
+                </div>
+              </div>
               {course.modules.length === 0 ? (
                 <EmptyState
                   eyebrow="Modulos"
@@ -275,7 +294,14 @@ export default async function CourseEditorPage({
                         href={getEditorHref(course.id, selectedModule.slug, step.slug)}
                       >
                         <p className="text-xs font-medium uppercase tracking-wide opacity-70">Paso {stepIndex + 1}</p>
-                        <p className="mt-1 text-sm font-semibold">{step.title}</p>
+                        <div className="mt-1 flex items-center gap-2">
+                          <p className="text-sm font-semibold">{step.title}</p>
+                          <Badge
+                            variant={step.deliveryMode === "MEDIA_FIRST" ? "warning" : step.deliveryMode === "LINK_ONLY" ? "default" : "success"}
+                          >
+                            {step.deliveryMode}
+                          </Badge>
+                        </div>
                       </Link>
                     );
                   })
@@ -374,9 +400,14 @@ export default async function CourseEditorPage({
                   </CardDescription>
                 </div>
                 {selectedStep ? (
-                  <Badge>
-                    Paso {navigation.selectedStepIndex + 1} de {selectedModule?.steps.length ?? 0}
-                  </Badge>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge>
+                      Paso {navigation.selectedStepIndex + 1} de {selectedModule?.steps.length ?? 0}
+                    </Badge>
+                    <Badge variant={selectedStep.deliveryMode === "MEDIA_FIRST" ? "warning" : selectedStep.deliveryMode === "LINK_ONLY" ? "default" : "success"}>
+                      {selectedStep.deliveryMode}
+                    </Badge>
+                  </div>
                 ) : null}
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -459,6 +490,7 @@ export default async function CourseEditorPage({
                       <Select name="deliveryMode" defaultValue="STANDARD">
                         <option value="STANDARD">STANDARD</option>
                         <option value="MEDIA_FIRST">MEDIA_FIRST</option>
+                        <option value="LINK_ONLY">LINK_ONLY</option>
                       </Select>
                       <Select name="renderMode" defaultValue="TEXT">
                         <option value="TEXT">TEXT</option>
@@ -503,6 +535,7 @@ export default async function CourseEditorPage({
                       <Select name="deliveryMode" defaultValue={selectedStep.deliveryMode}>
                         <option value="STANDARD">STANDARD</option>
                         <option value="MEDIA_FIRST">MEDIA_FIRST</option>
+                        <option value="LINK_ONLY">LINK_ONLY</option>
                       </Select>
                     </div>
                     <div className="grid gap-3 md:grid-cols-3">
@@ -518,6 +551,11 @@ export default async function CourseEditorPage({
                       </Select>
                       <Input name="mediaUrl" defaultValue={selectedStep.mediaUrl ?? ""} placeholder="https://... o /asset" />
                     </div>
+                    {selectedStep.deliveryMode === "MEDIA_FIRST" ? (
+                      <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                        Este paso puede disparar dos mensajes seguidos. Reservalo para bienvenida visual o actividades donde la imagen tenga que aparecer antes del copy.
+                      </p>
+                    ) : null}
                     <div className="grid gap-3 md:grid-cols-4">
                       <Input name="captureKey" defaultValue={selectedStep.captureKey ?? ""} placeholder="captureKey" />
                       <Input name="assessmentKey" defaultValue={selectedStep.assessmentKey ?? ""} placeholder="assessmentKey" />
@@ -635,6 +673,7 @@ export default async function CourseEditorPage({
                       <Select name="deliveryMode" defaultValue="STANDARD">
                         <option value="STANDARD">STANDARD</option>
                         <option value="MEDIA_FIRST">MEDIA_FIRST</option>
+                        <option value="LINK_ONLY">LINK_ONLY</option>
                       </Select>
                       <Select name="renderMode" defaultValue="TEXT">
                         <option value="TEXT">TEXT</option>

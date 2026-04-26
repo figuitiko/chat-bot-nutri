@@ -26,6 +26,7 @@ enum TemplateKind {
 enum TemplateDeliveryMode {
   STANDARD
   MEDIA_FIRST
+  LINK_ONLY
 }
 
 enum CourseStatus {

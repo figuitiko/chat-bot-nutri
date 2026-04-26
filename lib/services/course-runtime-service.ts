@@ -1,14 +1,17 @@
 import {
   FlowStepRenderMode,
+  MessageDirection,
   MessageStatus,
   MessageType,
   type CourseStep,
   type CourseTransition,
+  type Prisma,
 } from "@/generated/prisma/client";
 
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
 import { AppError } from "@/lib/http";
+import { logger } from "@/lib/logger";
 import { ensureTemplateBody, renderTemplateBody } from "@/lib/bot/responses";
 import {
   matchStepTransition,
@@ -17,6 +20,11 @@ import {
   resolveCapturedValue,
 } from "@/lib/bot/state-machine";
 import { storeOutboundMessage } from "@/lib/services/messages-service";
+import {
+  buildStepBodyWithDeliveryMode,
+  estimateOutboundMessagesForStep,
+  shouldPauseForTwilioBurst,
+} from "@/lib/services/course-delivery";
 import {
   createWhatsAppInteractiveTemplate,
   sendWhatsAppTemplateMessage,
@@ -60,6 +68,131 @@ type RuntimeCourseStep = Pick<
     courseId: string;
   };
 };
+
+const COURSE_BURST_PAUSE_REASON = "TWILIO_14107_GUARD";
+
+type CourseConversationContext = Prisma.JsonValue | Prisma.InputJsonValue | null | undefined;
+
+type PendingCourseStepState = {
+  stepId: string;
+  variables?: Record<string, string>;
+  pauseUntil?: Date | null;
+  pauseReason?: string;
+};
+
+type CourseBurstDecision = {
+  recentOutboundCount: number;
+  projectedOutboundCount: number;
+  shouldWarn: boolean;
+  shouldPause: boolean;
+};
+
+function parsePendingVariables(rawValue: string | undefined) {
+  if (!rawValue) {
+    return undefined;
+  }
+
+  try {
+    const parsed = JSON.parse(rawValue) as Record<string, unknown>;
+
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return undefined;
+    }
+
+    return Object.fromEntries(
+      Object.entries(parsed).map(([key, value]) => [key, String(value ?? "")]),
+    );
+  } catch {
+    return undefined;
+  }
+}
+
+function readPendingCourseStepState(contextData: CourseConversationContext): PendingCourseStepState | null {
+  const context = readConversationContext(contextData);
+  const stepId = context.pendingCourseStepId?.trim();
+
+  if (!stepId) {
+    return null;
+  }
+
+  const pauseUntil = context.rateLimitPauseUntil ? new Date(context.rateLimitPauseUntil) : null;
+
+  return {
+    stepId,
+    variables: parsePendingVariables(context.pendingVariables),
+    pauseUntil:
+      pauseUntil && !Number.isNaN(pauseUntil.getTime()) ? pauseUntil : null,
+    pauseReason: context.pauseReason,
+  };
+}
+
+function withPendingCourseStepState(input: {
+  contextData: CourseConversationContext;
+  stepId: string;
+  variables?: Record<string, string>;
+  pauseUntil: Date;
+}) {
+  const context = readConversationContext(input.contextData);
+
+  return {
+    ...context,
+    pendingCourseStepId: input.stepId,
+    pendingVariables: JSON.stringify(input.variables ?? {}),
+    rateLimitPauseUntil: input.pauseUntil.toISOString(),
+    pauseReason: COURSE_BURST_PAUSE_REASON,
+  };
+}
+
+function clearPendingCourseStepState(contextData: CourseConversationContext) {
+  const context = { ...readConversationContext(contextData) };
+
+  delete context.pendingCourseStepId;
+  delete context.pendingVariables;
+  delete context.rateLimitPauseUntil;
+  delete context.pauseReason;
+
+  return context;
+}
+
+async function countRecentOutboundMessages(contactId: string) {
+  const windowStart = new Date(Date.now() - 30_000);
+
+  return db.message.count({
+    where: {
+      contactId,
+      direction: MessageDirection.OUTBOUND,
+      createdAt: {
+        gte: windowStart,
+      },
+    },
+  });
+}
+
+async function getCourseBurstDecision(input: {
+  contactId: string;
+  step: RuntimeCourseStep;
+}) : Promise<CourseBurstDecision> {
+  const resolvedMediaUrl = resolveStepMediaUrl(input.step.mediaUrl);
+  const projectedOutboundCount = estimateOutboundMessagesForStep({
+    deliveryMode: input.step.deliveryMode,
+    kind: input.step.kind,
+    hasMedia: Boolean(resolvedMediaUrl),
+  });
+  const recentOutboundCount = await countRecentOutboundMessages(input.contactId);
+
+  return {
+    recentOutboundCount,
+    projectedOutboundCount,
+    shouldWarn:
+      recentOutboundCount + projectedOutboundCount >=
+      env.TWILIO_BURST_SOFT_WARNING_THRESHOLD,
+    shouldPause: shouldPauseForTwilioBurst({
+      recentOutboundCount,
+      projectedOutboundCount,
+      hardPauseThreshold: env.TWILIO_BURST_HARD_PAUSE_THRESHOLD,
+    }),
+  };
+}
 
 function resolveStepMediaUrl(mediaUrl: string | null | undefined) {
   if (!mediaUrl) {
@@ -220,17 +353,21 @@ async function buildConversationVariables(
   return variables;
 }
 
-async function ensureInteractiveStepContentSid(step: RuntimeCourseStep, variables?: Record<string, string>) {
-  const options = buildInteractiveOptions(step);
-  const mode = resolveInteractiveMode(step, options);
+async function ensureInteractiveStepContentSid(input: {
+  step: RuntimeCourseStep;
+  renderedBody: string;
+  variables?: Record<string, string>;
+}) {
+  const options = buildInteractiveOptions(input.step);
+  const mode = resolveInteractiveMode(input.step, options);
 
   if (!mode) {
     return null;
   }
 
-  const shouldPersist = !variables || Object.keys(variables).length === 0;
+  const shouldPersist = !input.variables || Object.keys(input.variables).length === 0;
   const existingContentSid = await db.messageTemplate.findFirst({
-    where: { key: step.slug, isActive: true },
+    where: { key: input.step.slug, isActive: true },
     select: { twilioContentSid: true },
   });
 
@@ -238,27 +375,26 @@ async function ensureInteractiveStepContentSid(step: RuntimeCourseStep, variable
     return existingContentSid.twilioContentSid;
   }
 
-  const renderedBody = renderTemplateBody(ensureTemplateBody(step.body), variables);
   const content = await createWhatsAppInteractiveTemplate({
-    friendlyName: step.slug,
+    friendlyName: input.step.slug,
     language: "es-MX",
-    body: renderedBody,
+    body: input.renderedBody,
     mode,
     options,
   });
 
   if (shouldPersist) {
     await db.messageTemplate.upsert({
-      where: { key: step.slug },
+      where: { key: input.step.slug },
       create: {
-        key: step.slug,
-        name: step.slug,
-        body: step.body,
+        key: input.step.slug,
+        name: input.step.slug,
+        body: input.step.body,
         kind: "TWILIO_CONTENT_TEMPLATE",
         twilioContentSid: content.sid,
       },
       update: {
-        body: step.body,
+        body: input.step.body,
         kind: "TWILIO_CONTENT_TEMPLATE",
         twilioContentSid: content.sid,
       },
@@ -373,6 +509,67 @@ async function getCourseEntryStep(courseId: string) {
   return { course, entryModule, entryStep };
 }
 
+async function maybePauseCourseConversationStep(input: {
+  conversationId: string;
+  contactId: string;
+  step: RuntimeCourseStep;
+  contextData: CourseConversationContext;
+}) {
+  const decision = await getCourseBurstDecision({
+    contactId: input.contactId,
+    step: input.step,
+  });
+
+  if (decision.shouldWarn && !decision.shouldPause) {
+    logger.warn("course.delivery.high_burst_risk", {
+      contactId: input.contactId,
+      conversationId: input.conversationId,
+      courseStepId: input.step.id,
+      outboundCountLast30s: decision.recentOutboundCount,
+      projectedOutboundCount: decision.projectedOutboundCount,
+    });
+  }
+
+  if (!decision.shouldPause) {
+    return null;
+  }
+
+  const pauseUntil = new Date(Date.now() + env.TWILIO_BURST_COOLDOWN_SECONDS * 1000);
+  const contextData = withPendingCourseStepState({
+    contextData: input.contextData,
+    stepId: input.step.id,
+    variables: await buildConversationVariables(
+      readConversationContext(input.contextData),
+      input.step,
+    ),
+    pauseUntil,
+  });
+
+  const conversation = await db.conversation.update({
+    where: { id: input.conversationId },
+    data: {
+      courseId: input.step.module.courseId,
+      selectedCourseId: input.step.module.courseId,
+      currentCourseModuleId: input.step.module.id,
+      currentCourseStepId: input.step.id,
+      contextData,
+      status: "OPEN",
+      lastMessageAt: new Date(),
+    },
+  });
+
+  logger.warn("course.delivery.paused_for_twilio_burst", {
+    contactId: input.contactId,
+    conversationId: input.conversationId,
+    courseStepId: input.step.id,
+    outboundCountLast30s: decision.recentOutboundCount,
+    projectedOutboundCount: decision.projectedOutboundCount,
+    pauseUntil: pauseUntil.toISOString(),
+  });
+
+  return { conversation, pauseUntil, ...decision };
+}
+
 async function sendMediaAttachment(input: {
   contactId: string;
   contactPhone: string;
@@ -411,11 +608,17 @@ async function sendPlainTextStep(input: {
   variables?: Record<string, string>;
   skipMedia?: boolean;
 }) {
-  const body = renderTemplateBody(ensureTemplateBody(input.step.body), input.variables);
+  const resolvedMediaUrl = input.skipMedia ? undefined : resolveStepMediaUrl(input.step.mediaUrl);
+  const body = buildStepBodyWithDeliveryMode({
+    body: renderTemplateBody(ensureTemplateBody(input.step.body), input.variables),
+    deliveryMode: input.step.deliveryMode,
+    resolvedMediaUrl,
+  });
   const providerMessage = await sendWhatsAppTextMessage({
     to: input.contactPhone,
     body,
-    mediaUrl: input.skipMedia ? undefined : resolveStepMediaUrl(input.step.mediaUrl),
+    mediaUrl:
+      input.step.deliveryMode === "LINK_ONLY" ? undefined : resolvedMediaUrl,
   });
 
   const persisted = await storeOutboundMessage({
@@ -440,16 +643,22 @@ export async function sendCourseStep(input: {
   variables?: Record<string, string>;
   skipMedia?: boolean;
 }) {
-  const renderedBody = renderTemplateBody(ensureTemplateBody(input.step.body), input.variables);
   const resolvedMediaUrl = input.skipMedia ? undefined : resolveStepMediaUrl(input.step.mediaUrl);
+  const renderedBody = buildStepBodyWithDeliveryMode({
+    body: renderTemplateBody(ensureTemplateBody(input.step.body), input.variables),
+    deliveryMode: input.step.deliveryMode,
+    resolvedMediaUrl,
+  });
+  const attachableMediaUrl =
+    input.step.deliveryMode === "LINK_ONLY" ? undefined : resolvedMediaUrl;
 
-  if (resolvedMediaUrl && input.step.deliveryMode === "MEDIA_FIRST") {
+  if (attachableMediaUrl && input.step.deliveryMode === "MEDIA_FIRST") {
     const providerMessage = await sendMediaAttachment({
       contactId: input.contactId,
       contactPhone: input.contactPhone,
       conversationId: input.conversationId,
       courseStepId: input.step.id,
-      mediaUrl: resolvedMediaUrl,
+      mediaUrl: attachableMediaUrl,
       deferredFollowUp: {
         type: "course-step",
         courseStepId: input.step.id,
@@ -462,17 +671,21 @@ export async function sendCourseStep(input: {
   }
 
   if (input.step.kind === "TWILIO_CONTENT_TEMPLATE") {
-    if (resolvedMediaUrl) {
+    if (attachableMediaUrl) {
       await sendMediaAttachment({
         contactId: input.contactId,
         contactPhone: input.contactPhone,
         conversationId: input.conversationId,
         courseStepId: input.step.id,
-        mediaUrl: resolvedMediaUrl,
+        mediaUrl: attachableMediaUrl,
       });
     }
 
-    const contentSid = await ensureInteractiveStepContentSid(input.step, input.variables);
+    const contentSid = await ensureInteractiveStepContentSid({
+      step: input.step,
+      renderedBody,
+      variables: input.variables,
+    });
 
     if (!contentSid) {
       return sendPlainTextStep(input);
@@ -545,7 +758,7 @@ async function startCourseConversationFromEntry(input: {
   entryModule: Awaited<ReturnType<typeof getActiveCourseEntryStep>>["entryModule"];
   entryStep: Awaited<ReturnType<typeof getActiveCourseEntryStep>>["entryStep"];
 }) {
-  const contextData = mergeConversationContext(null, {});
+  const contextData = clearPendingCourseStepState(mergeConversationContext(null, {}));
   const conversation = await db.conversation.upsert({
     where: {
       contactId_courseId: {
@@ -577,6 +790,24 @@ async function startCourseConversationFromEntry(input: {
     readConversationContext(contextData),
     input.entryStep,
   );
+
+  const pauseResult = await maybePauseCourseConversationStep({
+    conversationId: conversation.id,
+    contactId: input.contactId,
+    step: input.entryStep,
+    contextData,
+  });
+
+  if (pauseResult) {
+    return {
+      conversation: pauseResult.conversation,
+      course: input.course,
+      module: input.entryModule,
+      step: input.entryStep,
+      providerMessageSid: null,
+    };
+  }
+
   const result = await sendCourseStep({
     contactId: input.contactId,
     contactPhone: input.contactPhone,
@@ -694,6 +925,22 @@ export async function progressCourseConversation(input: {
   );
 
   const nextStep = transition.nextStep;
+  const variables = await buildConversationVariables(readConversationContext(contextData), nextStep);
+  const pauseResult = await maybePauseCourseConversationStep({
+    conversationId: conversation.id,
+    contactId: conversation.contactId,
+    step: nextStep,
+    contextData,
+  });
+
+  if (pauseResult) {
+    return {
+      conversation: pauseResult.conversation,
+      nextStep,
+      providerMessageSid: null,
+    };
+  }
+
   const nextStatus = nextStep.isTerminal ? "CLOSED" : "OPEN";
   const updatedConversation = await db.conversation.update({
     where: { id: conversation.id },
@@ -702,13 +949,12 @@ export async function progressCourseConversation(input: {
       selectedCourseId: nextStep.module.courseId,
       currentCourseModuleId: nextStep.module.id,
       currentCourseStepId: nextStep.isTerminal ? null : nextStep.id,
-      contextData,
+      contextData: clearPendingCourseStepState(contextData),
       status: nextStatus,
       lastMessageAt: new Date(),
     },
   });
 
-  const variables = await buildConversationVariables(readConversationContext(contextData), nextStep);
   const result = await sendCourseStep({
     contactId: conversation.contactId,
     contactPhone: input.contactPhone,
@@ -726,6 +972,106 @@ export async function progressCourseConversation(input: {
     conversation: updatedConversation,
     nextStep,
     providerMessageSid: result.providerMessage.sid,
+  };
+}
+
+export async function resumePausedCourseConversation(input: {
+  conversationId: string;
+  contactPhone: string;
+}) {
+  const conversation = await db.conversation.findUnique({
+    where: { id: input.conversationId },
+    include: {
+      currentCourseStep: {
+        include: {
+          module: {
+            select: {
+              id: true,
+              courseId: true,
+            },
+          },
+          transitions: {
+            where: { isActive: true },
+            orderBy: { priority: "asc" },
+          },
+        },
+      },
+    },
+  });
+
+  if (!conversation?.currentCourseStep) {
+    return null;
+  }
+
+  const pendingState = readPendingCourseStepState(conversation.contextData);
+
+  if (!pendingState || pendingState.stepId !== conversation.currentCourseStep.id) {
+    return null;
+  }
+
+  if (pendingState.pauseUntil && pendingState.pauseUntil > new Date()) {
+    return {
+      conversation,
+      step: conversation.currentCourseStep,
+      providerMessageSid: null,
+      waiting: true,
+    };
+  }
+
+  const variables =
+    pendingState.variables ??
+    (await buildConversationVariables(
+      readConversationContext(conversation.contextData),
+      conversation.currentCourseStep,
+    ));
+
+  const pauseResult = await maybePauseCourseConversationStep({
+    conversationId: conversation.id,
+    contactId: conversation.contactId,
+    step: conversation.currentCourseStep,
+    contextData: clearPendingCourseStepState(conversation.contextData),
+  });
+
+  if (pauseResult) {
+    return {
+      conversation: pauseResult.conversation,
+      step: conversation.currentCourseStep,
+      providerMessageSid: null,
+      waiting: true,
+    };
+  }
+
+  const result = await sendCourseStep({
+    contactId: conversation.contactId,
+    contactPhone: input.contactPhone,
+    conversationId: conversation.id,
+    step: conversation.currentCourseStep,
+    variables,
+  });
+
+  const nextStatus = conversation.currentCourseStep.isTerminal ? "CLOSED" : "OPEN";
+  const updatedConversation = await db.conversation.update({
+    where: { id: conversation.id },
+    data: {
+      currentCourseStepId: conversation.currentCourseStep.isTerminal
+        ? null
+        : conversation.currentCourseStep.id,
+      contextData: clearPendingCourseStepState(conversation.contextData),
+      status: nextStatus,
+      lastMessageAt: new Date(),
+    },
+  });
+
+  await db.contact.update({
+    where: { id: conversation.contactId },
+    data: { lastOutboundAt: new Date() },
+  });
+
+  return {
+    conversation: updatedConversation,
+    step: conversation.currentCourseStep,
+    providerMessageSid: result.providerMessage.sid,
+    waiting: false,
   };
 }
 

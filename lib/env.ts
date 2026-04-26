@@ -14,6 +14,9 @@ const envSchema = z.object({
   TWILIO_ACCOUNT_SID: z.string().min(1),
   TWILIO_AUTH_TOKEN: z.string().min(1),
   TWILIO_MEDIA_FOLLOWUP_DELAY_MS: z.coerce.number().int().min(0).default(0),
+  TWILIO_BURST_SOFT_WARNING_THRESHOLD: z.coerce.number().int().min(1).default(20),
+  TWILIO_BURST_HARD_PAUSE_THRESHOLD: z.coerce.number().int().min(1).default(24),
+  TWILIO_BURST_COOLDOWN_SECONDS: z.coerce.number().int().min(1).default(35),
   TWILIO_STATUS_CALLBACK_URL: z.url(),
   TWILIO_VALIDATE_SIGNATURE: z
     .enum(["true", "false"])

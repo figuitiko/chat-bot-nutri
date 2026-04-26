@@ -1,0 +1,1 @@
+ALTER TYPE "TemplateDeliveryMode" ADD VALUE IF NOT EXISTS 'LINK_ONLY';

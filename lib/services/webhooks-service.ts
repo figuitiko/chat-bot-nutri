@@ -20,6 +20,7 @@ import {
   dispatchDeferredCourseFollowUp,
   progressCourseConversation,
   restartCourseConversation,
+  resumePausedCourseConversation,
   startSelectedCourseConversation,
 } from "@/lib/services/course-runtime-service";
 import {
@@ -388,6 +389,20 @@ async function handleCourseEngine(
     });
 
     await startAccessPrompt(context, state);
+    return;
+  }
+
+  const resumed = await resumePausedCourseConversation({
+    conversationId: context.activeCourseConversation.id,
+    contactPhone: context.contactPhone,
+  });
+
+  if (resumed) {
+    state.conversationId = resumed.conversation.id;
+    state.matchedFlowKey = resumed.step.module.courseId;
+    state.matchedTemplateKey = resumed.step.slug;
+    state.responseMessageSid = resumed.providerMessageSid;
+    state.replied = true;
     return;
   }
 
