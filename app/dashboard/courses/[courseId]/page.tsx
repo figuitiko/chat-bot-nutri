@@ -9,7 +9,9 @@ import {
   createTransitionAction,
   deleteModuleAction,
   deleteStepAction,
+  deleteTransitionAction,
   updateCourseAction,
+  updateTransitionAction,
   uploadAssetAction,
 } from "@/app/dashboard/actions";
 import { EmptyState } from "@/components/dashboard/empty-state";
@@ -374,19 +376,17 @@ export default async function CourseEditorPage({
                   <Input name="title" defaultValue={selectedModule.title} />
                   <Input name="slug" defaultValue={selectedModule.slug} />
                   <Textarea name="summary" defaultValue={selectedModule.summary ?? ""} />
-                  <div className="flex gap-2">
-                    <Button type="submit" variant="outline">
-                      Guardar modulo
-                    </Button>
-                    <DeleteConfirmButton
-                      action={deleteModuleAction}
-                      message={`¿Estás seguro que vas a eliminar el módulo "${selectedModule.title}" y todos sus pasos? Esta acción no se puede deshacer.`}
-                      hiddenFields={{ courseId: course.id, moduleId: selectedModule.id }}
-                    >
-                      Eliminar módulo
-                    </DeleteConfirmButton>
-                  </div>
+                  <Button type="submit" variant="outline">
+                    Guardar modulo
+                  </Button>
                 </form>
+                <DeleteConfirmButton
+                  action={deleteModuleAction}
+                  message={`¿Estás seguro que vas a eliminar el módulo "${selectedModule.title}" y todos sus pasos? Esta acción no se puede deshacer.`}
+                  hiddenFields={{ courseId: course.id, moduleId: selectedModule.id }}
+                >
+                  Eliminar módulo
+                </DeleteConfirmButton>
 
                 <div className="space-y-3 rounded-2xl bg-slate-50 p-4">
                   <p className="text-sm font-medium text-slate-700">Intro del modulo</p>
@@ -603,27 +603,25 @@ export default async function CourseEditorPage({
                         Paso terminal
                       </label>
                     </fieldset>
-                    <div className="flex flex-wrap gap-2">
-                      <StepSaveButton
-                        isSaved={isSaved}
-                        href={buildCourseEditorHref(course.id, {
-                          moduleSlug: selectedModule.slug,
-                          stepSlug: selectedStep.slug,
-                        })}
-                      />
-                      <DeleteConfirmButton
-                        action={deleteStepAction}
-                        message={`¿Estás seguro que vas a eliminar el paso "${selectedStep.title}"? Esta acción no se puede deshacer.`}
-                        hiddenFields={{
-                          courseId: course.id,
-                          stepId: selectedStep.id,
-                          moduleSlug: selectedModule.slug,
-                        }}
-                      >
-                        Eliminar paso
-                      </DeleteConfirmButton>
-                    </div>
+                    <StepSaveButton
+                      isSaved={isSaved}
+                      href={buildCourseEditorHref(course.id, {
+                        moduleSlug: selectedModule.slug,
+                        stepSlug: selectedStep.slug,
+                      })}
+                    />
                   </form>
+                  <DeleteConfirmButton
+                    action={deleteStepAction}
+                    message={`¿Estás seguro que vas a eliminar el paso "${selectedStep.title}"? Esta acción no se puede deshacer.`}
+                    hiddenFields={{
+                      courseId: course.id,
+                      stepId: selectedStep.id,
+                      moduleSlug: selectedModule.slug,
+                    }}
+                  >
+                    Eliminar paso
+                  </DeleteConfirmButton>
 
                   <form action={uploadAssetAction} className="flex flex-wrap items-center gap-2 rounded-2xl bg-slate-50 p-4">
                     <input type="hidden" name="courseId" value={course.id} />
@@ -644,11 +642,53 @@ export default async function CourseEditorPage({
                         Transiciones actuales
                       </p>
                       {selectedStep.transitions.map((transition) => (
-                        <div key={transition.id} className="text-sm text-slate-600">
-                          <span className="font-medium text-slate-950">{transition.pattern}</span> →{" "}
-                          {transition.nextStep?.title ?? "Sin destino"}{" "}
-                          {transition.outputValue ? `· guarda "${transition.outputValue}"` : ""}
-                        </div>
+                        <form key={transition.id} action={updateTransitionAction} className="grid gap-2 rounded-lg border border-slate-200 bg-white p-2">
+                          <input type="hidden" name="courseId" value={course.id} />
+                          <input type="hidden" name="stepId" value={selectedStep.id} />
+                          <input type="hidden" name="transitionId" value={transition.id} />
+                          <input type="hidden" name="moduleSlug" value={selectedModule.slug} />
+                          <input type="hidden" name="stepSlug" value={selectedStep.slug} />
+                          <div className="grid gap-2 md:grid-cols-2">
+                            <Input name="pattern" defaultValue={transition.pattern} placeholder="Patron" />
+                            <Select name="matchType" defaultValue={transition.matchType}>
+                              <option value="EXACT">EXACT</option>
+                              <option value="KEYWORD">KEYWORD</option>
+                              <option value="CONTAINS">CONTAINS</option>
+                              <option value="FALLBACK">FALLBACK</option>
+                            </Select>
+                          </div>
+                          <div className="grid gap-2 md:grid-cols-3">
+                            <Input name="displayLabel" defaultValue={transition.displayLabel ?? ""} placeholder="Etiqueta visible" />
+                            <Input name="displayHint" defaultValue={transition.displayHint ?? ""} placeholder="Ayuda visible" />
+                            <Input name="outputValue" defaultValue={transition.outputValue ?? ""} placeholder="Valor guardado" />
+                          </div>
+                          <div className="grid gap-2 md:grid-cols-[1fr_100px]">
+                            <Select name="nextStepId" defaultValue={transition.nextStepId ?? ""}>
+                              <option value="" disabled>Siguiente paso</option>
+                              {allSteps.map((candidate) => (
+                                <option key={candidate.id} value={candidate.id}>
+                                  {candidate.title}
+                                </option>
+                              ))}
+                            </Select>
+                            <Input name="priority" defaultValue={String(transition.priority)} placeholder="100" />
+                          </div>
+                          <div className="flex gap-2">
+                            <Button type="submit" size="sm" variant="outline">Guardar</Button>
+                            <DeleteConfirmButton
+                              action={deleteTransitionAction}
+                              message={`¿Eliminar la transición "${transition.pattern}"?`}
+                              hiddenFields={{
+                                transitionId: transition.id,
+                                courseId: course.id,
+                                moduleSlug: selectedModule.slug,
+                                stepSlug: selectedStep.slug,
+                              }}
+                            >
+                              Eliminar
+                            </DeleteConfirmButton>
+                          </div>
+                        </form>
                       ))}
                     </div>
                   ) : null}

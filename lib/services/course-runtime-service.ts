@@ -26,6 +26,7 @@ import {
   shouldPauseForTwilioBurst,
 } from "@/lib/services/course-delivery";
 import { persistCourseSurveySubmission } from "@/lib/services/course-survey";
+import { buildChoiceDescription, buildChoiceTitle } from "@/lib/services/course-interactive-options";
 import {
   createWhatsAppInteractiveTemplate,
   sendWhatsAppTemplateMessage,
@@ -207,48 +208,6 @@ function resolveStepMediaUrl(mediaUrl: string | null | undefined) {
   const baseUrl = env.TWILIO_WEBHOOK_BASE_URL.replace(/\/$/, "");
   const path = mediaUrl.startsWith("/") ? mediaUrl : `/${mediaUrl}`;
   return `${baseUrl}${path}`;
-}
-
-function toTitleCase(value: string) {
-  return value
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
-    .join(" ");
-}
-
-function buildChoiceTitle(
-  transition: Pick<CourseTransition, "pattern" | "outputValue" | "displayLabel">,
-) {
-  if (transition.displayLabel?.trim()) {
-    return transition.displayLabel.trim();
-  }
-
-  const outputValue = transition.outputValue?.trim();
-  const pattern = transition.pattern.trim();
-
-  if (outputValue) {
-    return /^\d+$/.test(pattern) ? pattern : outputValue;
-  }
-
-  return toTitleCase(pattern);
-}
-
-function buildChoiceDescription(
-  transition: Pick<CourseTransition, "pattern" | "outputValue" | "displayHint">,
-) {
-  if (transition.displayHint?.trim()) {
-    return transition.displayHint.trim();
-  }
-
-  const pattern = transition.pattern.trim();
-  const outputValue = transition.outputValue?.trim();
-
-  if (!outputValue || !/^\d+$/.test(pattern) || outputValue === pattern) {
-    return undefined;
-  }
-
-  return outputValue;
 }
 
 function buildInteractiveOptions(step: RuntimeCourseStep): WhatsAppInteractiveOption[] {

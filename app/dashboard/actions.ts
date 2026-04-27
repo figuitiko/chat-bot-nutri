@@ -452,6 +452,52 @@ export async function createOrUpdateStepAction(formData: FormData) {
   });
 }
 
+export async function updateTransitionAction(formData: FormData) {
+  await requireAdminSession();
+
+  const transitionId = String(formData.get("transitionId") ?? "");
+  if (!transitionId) throw new AppError("MISSING_TRANSITION_ID", "transitionId required", 400);
+
+  const input = transitionInputSchema.parse({
+    courseId: formData.get("courseId"),
+    stepId: formData.get("stepId"),
+    nextStepId: formData.get("nextStepId"),
+    matchType: formData.get("matchType"),
+    pattern: formData.get("pattern"),
+    displayLabel: formData.get("displayLabel"),
+    displayHint: formData.get("displayHint"),
+    outputValue: formData.get("outputValue"),
+    priority: formData.get("priority") || 100,
+  });
+
+  await db.courseTransition.update({
+    where: { id: transitionId },
+    data: {
+      nextStepId: input.nextStepId,
+      matchType: input.matchType,
+      pattern: input.pattern,
+      displayLabel: input.displayLabel || null,
+      displayHint: input.displayHint || null,
+      outputValue: input.outputValue || null,
+      priority: input.priority,
+    },
+  });
+
+  redirectToCourse(input.courseId, { ...getEditorState(formData), saved: true });
+}
+
+export async function deleteTransitionAction(formData: FormData) {
+  await requireAdminSession();
+
+  const transitionId = String(formData.get("transitionId") ?? "");
+  const courseId = String(formData.get("courseId") ?? "");
+  if (!transitionId) throw new AppError("MISSING_TRANSITION_ID", "transitionId required", 400);
+
+  await db.courseTransition.delete({ where: { id: transitionId } });
+
+  redirectToCourse(courseId, getEditorState(formData));
+}
+
 export async function createTransitionAction(formData: FormData) {
   await requireAdminSession();
 
