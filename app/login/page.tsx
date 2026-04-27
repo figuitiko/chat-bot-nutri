@@ -2,10 +2,7 @@ import { redirect } from "next/navigation";
 
 import { getAdminSession } from "@/lib/admin-auth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
-import { loginAction } from "@/app/login/actions";
+import { LoginForm } from "./login-form";
 
 export const dynamic = "force-dynamic";
 
@@ -26,22 +23,7 @@ export default async function LoginPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form action={loginAction} className="space-y-4" aria-describedby="login-help">
-            <p id="login-help" className="text-sm text-slate-500">
-              Usa las credenciales del administrador configuradas en variables de entorno para publicar cursos y gestionar accesos.
-            </p>
-            <div className="space-y-2">
-              <Label htmlFor="email">Correo</Label>
-              <Input id="email" name="email" type="email" autoComplete="email" required />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Contraseña</Label>
-              <Input id="password" name="password" type="password" autoComplete="current-password" required />
-            </div>
-            <Button className="w-full" type="submit">
-              Entrar
-            </Button>
-          </form>
+          <LoginForm />
         </CardContent>
       </Card>
     </main>
