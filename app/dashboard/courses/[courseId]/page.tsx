@@ -19,7 +19,10 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
-import { getCourseEditorNavigation } from "@/lib/dashboard/course-editor-navigation";
+import {
+  getCourseEditorNavigation,
+  getCourseEditorStepItemClasses,
+} from "@/lib/dashboard/course-editor-navigation";
 import { estimateOutboundMessagesForStep } from "@/lib/services/course-delivery";
 import { summarizeSurveySubmissions } from "@/lib/services/course-survey";
 import { db } from "@/lib/db";
@@ -317,16 +320,28 @@ export default async function CourseEditorPage({
                         key={step.id}
                         aria-current={isActive ? "step" : undefined}
                         className={cn(
-                          "rounded-2xl border px-4 py-3 transition-colors",
-                          isActive
-                            ? "border-slate-950 bg-slate-950 text-white"
-                            : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50",
+                          getCourseEditorStepItemClasses(isActive),
+                          "px-4 py-3",
                         )}
                         href={getEditorHref(course.id, selectedModule.slug, step.slug)}
                       >
-                        <p className="text-xs font-medium uppercase tracking-wide opacity-70">Paso {stepIndex + 1}</p>
-                        <div className="mt-1 flex items-center gap-2">
-                          <p className="text-sm font-semibold">{step.title}</p>
+                        <p
+                          className={cn(
+                            "text-xs font-medium uppercase tracking-wide",
+                            isActive ? "text-emerald-700" : "text-slate-500",
+                          )}
+                        >
+                          Paso {stepIndex + 1}
+                        </p>
+                        <div className="mt-2 flex items-start justify-between gap-3">
+                          <p
+                            className={cn(
+                              "min-w-0 text-sm font-semibold leading-5",
+                              isActive ? "text-emerald-950" : "text-slate-900",
+                            )}
+                          >
+                            {step.title}
+                          </p>
                           <Badge
                             variant={step.deliveryMode === "MEDIA_FIRST" ? "warning" : step.deliveryMode === "LINK_ONLY" ? "default" : "success"}
                           >

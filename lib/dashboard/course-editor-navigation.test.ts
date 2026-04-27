@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   getCourseEditorNavigation,
+  getCourseEditorStepItemClasses,
   type CourseEditorModuleBase,
 } from "@/lib/dashboard/course-editor-navigation";
 
@@ -73,5 +74,22 @@ describe("getCourseEditorNavigation", () => {
     expect(navigation.selectedStep).toBeNull();
     expect(navigation.previousStep).toBeNull();
     expect(navigation.nextStep).toBeNull();
+  });
+});
+
+describe("getCourseEditorStepItemClasses", () => {
+  it("uses a readable highlighted surface for the selected step", () => {
+    const classes = getCourseEditorStepItemClasses(true);
+
+    expect(classes).toContain("bg-emerald-50");
+    expect(classes).toContain("text-emerald-950");
+    expect(classes).not.toContain("bg-slate-950");
+  });
+
+  it("keeps the neutral card treatment for unselected steps", () => {
+    const classes = getCourseEditorStepItemClasses(false);
+
+    expect(classes).toContain("bg-white");
+    expect(classes).toContain("text-slate-700");
   });
 });

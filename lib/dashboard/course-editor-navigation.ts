@@ -33,6 +33,12 @@ export interface CourseEditorNavigationState<Module extends CourseEditorModuleBa
   totalSteps: number;
 }
 
+export function getCourseEditorStepItemClasses(isActive: boolean) {
+  return isActive
+    ? "rounded-2xl border border-emerald-200 bg-emerald-50 text-emerald-950 shadow-sm ring-1 ring-emerald-100 transition-colors"
+    : "rounded-2xl border border-slate-200 bg-white text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-50";
+}
+
 function normalizeSearchParam(value: SearchParamValue) {
   if (Array.isArray(value)) {
     return value[0];
