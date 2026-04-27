@@ -21,6 +21,7 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import {
   getCourseEditorNavigation,
+  getCourseEditorSelectionKey,
   getCourseEditorStepItemClasses,
 } from "@/lib/dashboard/course-editor-navigation";
 import { estimateOutboundMessagesForStep } from "@/lib/services/course-delivery";
@@ -553,7 +554,10 @@ export default async function CourseEditorPage({
                   </form>
                 </>
               ) : (
-                <>
+                <div
+                  key={getCourseEditorSelectionKey(selectedModule?.id, selectedStep.id)}
+                  className="grid gap-4"
+                >
                   <form action={createOrUpdateStepAction} className="grid gap-3" aria-describedby={`${selectedStep.id}-step-help`}>
                     <input type="hidden" name="courseId" value={course.id} />
                     <input type="hidden" name="moduleId" value={selectedModule.id} />
@@ -734,7 +738,7 @@ export default async function CourseEditorPage({
                     </Select>
                     <Button type="submit">Agregar paso</Button>
                   </form>
-                </>
+                </div>
               )}
             </CardContent>
           </Card>

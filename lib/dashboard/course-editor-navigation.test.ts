@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   getCourseEditorNavigation,
+  getCourseEditorSelectionKey,
   getCourseEditorStepItemClasses,
   type CourseEditorModuleBase,
 } from "@/lib/dashboard/course-editor-navigation";
@@ -91,5 +92,19 @@ describe("getCourseEditorStepItemClasses", () => {
 
     expect(classes).toContain("bg-white");
     expect(classes).toContain("text-slate-700");
+  });
+});
+
+
+describe("getCourseEditorSelectionKey", () => {
+  it("changes when the selected step changes so uncontrolled editor fields remount", () => {
+    expect(getCourseEditorSelectionKey("m1", "s1")).not.toBe(
+      getCourseEditorSelectionKey("m1", "s2"),
+    );
+  });
+
+  it("falls back safely when there is no selected step", () => {
+    expect(getCourseEditorSelectionKey("m1", null)).toBe("m1:no-step");
+    expect(getCourseEditorSelectionKey(null, null)).toBe("no-module:no-step");
   });
 });

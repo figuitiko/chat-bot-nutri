@@ -33,6 +33,11 @@ export interface CourseEditorNavigationState<Module extends CourseEditorModuleBa
   totalSteps: number;
 }
 
+
+export function getCourseEditorSelectionKey(moduleId?: string | null, stepId?: string | null) {
+  return `${moduleId ?? "no-module"}:${stepId ?? "no-step"}`;
+}
+
 export function getCourseEditorStepItemClasses(isActive: boolean) {
   return isActive
     ? "rounded-2xl border border-emerald-200 bg-emerald-50 text-emerald-950 shadow-sm ring-1 ring-emerald-100 transition-colors"
