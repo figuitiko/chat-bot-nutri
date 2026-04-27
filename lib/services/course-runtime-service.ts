@@ -244,7 +244,7 @@ function buildChoiceDescription(
   const pattern = transition.pattern.trim();
   const outputValue = transition.outputValue?.trim();
 
-  if (!outputValue || !/^\d+$/.test(pattern)) {
+  if (!outputValue || !/^\d+$/.test(pattern) || outputValue === pattern) {
     return undefined;
   }
 
