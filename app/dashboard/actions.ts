@@ -23,6 +23,7 @@ import { normalizePhone } from "@/lib/phone";
 import { upsertContactByPhone } from "@/lib/services/contacts-service";
 import { setContactAccessSecret } from "@/lib/services/access-service";
 import { buildCourseEditorEditorHref } from "@/lib/dashboard/course-editor-navigation";
+import { buildReorderUpdates } from "@/lib/dashboard/course-reorder";
 import {
   buildCourseStepCreateData,
   buildCourseStepUpdateData,
@@ -97,12 +98,18 @@ const enrollmentInputSchema = z.object({
 
 function redirectToCourse(
   courseId: string,
-  editorState?: { moduleSlug?: string | null; stepSlug?: string | null },
+  editorState?: { moduleSlug?: string | null; stepSlug?: string | null; saved?: boolean },
 ) {
+  const params = new URLSearchParams();
+  if (editorState?.moduleSlug) params.set("module", editorState.moduleSlug);
+  if (editorState?.stepSlug) params.set("step", editorState.stepSlug);
+  if (editorState?.saved) params.set("saved", "1");
+  const query = params.toString();
+  const url = `/dashboard/courses/${courseId}${query ? `?${query}` : ""}#step-editor`;
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/courses");
   revalidatePath(`/dashboard/courses/${courseId}`);
-  redirect(buildCourseEditorEditorHref(courseId, editorState));
+  redirect(url);
 }
 
 function getEditorState(formData: FormData) {
@@ -419,6 +426,7 @@ export async function createOrUpdateStepAction(formData: FormData) {
     redirectToCourse(input.courseId, {
       moduleSlug: getEditorState(formData).moduleSlug,
       stepSlug: input.slug,
+      saved: true,
     });
     return;
   }
@@ -469,6 +477,67 @@ export async function createTransitionAction(formData: FormData) {
   });
 
   redirectToCourse(input.courseId, getEditorState(formData));
+}
+
+export async function deleteStepAction(formData: FormData) {
+  await requireAdminSession();
+
+  const courseId = String(formData.get("courseId") ?? "");
+  const stepId = String(formData.get("stepId") ?? "");
+  const moduleSlug = String(formData.get("moduleSlug") ?? "");
+
+  if (!stepId) throw new AppError("MISSING_STEP_ID", "stepId required", 400);
+
+  await db.$transaction([
+    db.courseTransition.deleteMany({ where: { nextStepId: stepId } }),
+    db.courseStep.delete({ where: { id: stepId } }),
+  ]);
+
+  redirectToCourse(courseId, { moduleSlug });
+}
+
+export async function deleteModuleAction(formData: FormData) {
+  await requireAdminSession();
+
+  const courseId = String(formData.get("courseId") ?? "");
+  const moduleId = String(formData.get("moduleId") ?? "");
+
+  if (!moduleId) throw new AppError("MISSING_MODULE_ID", "moduleId required", 400);
+
+  const stepIds = await db.courseStep
+    .findMany({ where: { moduleId }, select: { id: true } })
+    .then((rows) => rows.map((r) => r.id));
+
+  await db.$transaction([
+    db.courseTransition.deleteMany({ where: { nextStepId: { in: stepIds } } }),
+    db.courseModule.delete({ where: { id: moduleId } }),
+  ]);
+
+  redirectToCourse(courseId);
+}
+
+export async function reorderStepsAction(moduleId: string, orderedIds: string[]) {
+  await requireAdminSession();
+
+  const updates = buildReorderUpdates(orderedIds);
+
+  await db.$transaction(
+    updates.map(({ id, sortOrder }) =>
+      db.courseStep.update({ where: { id }, data: { sortOrder } }),
+    ),
+  );
+}
+
+export async function reorderModulesAction(courseId: string, orderedIds: string[]) {
+  await requireAdminSession();
+
+  const updates = buildReorderUpdates(orderedIds);
+
+  await db.$transaction(
+    updates.map(({ id, sortOrder }) =>
+      db.courseModule.update({ where: { id }, data: { sortOrder } }),
+    ),
+  );
 }
 
 export async function uploadAssetAction(formData: FormData) {
