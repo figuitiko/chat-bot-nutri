@@ -12,6 +12,7 @@ import {
 } from "@/app/dashboard/actions";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { CourseEditorStepNavigation, CourseEditorStepPager } from "@/components/dashboard/course-editor-step-navigation";
+import { StepSaveButton } from "@/components/dashboard/step-save-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,10 +38,11 @@ export default async function CourseEditorPage({
   searchParams,
 }: {
   params: Promise<{ courseId: string }>;
-  searchParams: Promise<{ module?: string | string[]; step?: string | string[] }>;
+  searchParams: Promise<{ module?: string | string[]; step?: string | string[]; saved?: string }>;
 }) {
   const { courseId } = await params;
   const currentSearchParams = await searchParams;
+  const isSaved = currentSearchParams.saved === "1";
 
   const course = await db.course.findUnique({
     where: { id: courseId },
@@ -592,9 +594,13 @@ export default async function CourseEditorPage({
                       </label>
                     </fieldset>
                     <div className="flex flex-wrap gap-2">
-                      <Button type="submit" variant="outline">
-                        Guardar paso
-                      </Button>
+                      <StepSaveButton
+                        isSaved={isSaved}
+                        href={buildCourseEditorHref(course.id, {
+                          moduleSlug: selectedModule.slug,
+                          stepSlug: selectedStep.slug,
+                        })}
+                      />
                     </div>
                   </form>
 
