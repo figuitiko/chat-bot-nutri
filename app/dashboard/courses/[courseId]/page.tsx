@@ -15,6 +15,7 @@ import { EmptyState } from "@/components/dashboard/empty-state";
 import { CourseEditorStepNavigation, CourseEditorStepPager } from "@/components/dashboard/course-editor-step-navigation";
 import { StepSaveButton } from "@/components/dashboard/step-save-button";
 import { CourseModuleList } from "@/components/dashboard/course-module-list";
+import { DeleteConfirmButton } from "@/components/dashboard/delete-confirm-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -361,17 +362,13 @@ export default async function CourseEditorPage({
                     <Button type="submit" variant="outline">
                       Guardar modulo
                     </Button>
-                    <form action={deleteModuleAction}>
-                      <input type="hidden" name="courseId" value={course.id} />
-                      <input type="hidden" name="moduleId" value={selectedModule.id} />
-                      <Button
-                        type="submit"
-                        variant="outline"
-                        className="text-red-600 hover:bg-red-50 hover:text-red-700"
-                      >
-                        Eliminar módulo
-                      </Button>
-                    </form>
+                    <DeleteConfirmButton
+                      action={deleteModuleAction}
+                      message={`¿Estás seguro que vas a eliminar el módulo "${selectedModule.title}" y todos sus pasos? Esta acción no se puede deshacer.`}
+                      hiddenFields={{ courseId: course.id, moduleId: selectedModule.id }}
+                    >
+                      Eliminar módulo
+                    </DeleteConfirmButton>
                   </div>
                 </form>
 
@@ -598,18 +595,17 @@ export default async function CourseEditorPage({
                           stepSlug: selectedStep.slug,
                         })}
                       />
-                      <form action={deleteStepAction}>
-                        <input type="hidden" name="courseId" value={course.id} />
-                        <input type="hidden" name="stepId" value={selectedStep.id} />
-                        <input type="hidden" name="moduleSlug" value={selectedModule.slug} />
-                        <Button
-                          type="submit"
-                          variant="outline"
-                          className="text-red-600 hover:bg-red-50 hover:text-red-700"
-                        >
-                          Eliminar paso
-                        </Button>
-                      </form>
+                      <DeleteConfirmButton
+                        action={deleteStepAction}
+                        message={`¿Estás seguro que vas a eliminar el paso "${selectedStep.title}"? Esta acción no se puede deshacer.`}
+                        hiddenFields={{
+                          courseId: course.id,
+                          stepId: selectedStep.id,
+                          moduleSlug: selectedModule.slug,
+                        }}
+                      >
+                        Eliminar paso
+                      </DeleteConfirmButton>
                     </div>
                   </form>
 
