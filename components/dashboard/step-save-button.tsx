@@ -10,7 +10,6 @@ export function StepSaveButton({ isSaved, href }: { isSaved: boolean; href: stri
 
   useEffect(() => {
     if (!isSaved) return;
-    setSaved(true);
     const timer = setTimeout(() => {
       setSaved(false);
       router.replace(href);

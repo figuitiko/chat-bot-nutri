@@ -22,7 +22,6 @@ import { AppError } from "@/lib/http";
 import { normalizePhone } from "@/lib/phone";
 import { upsertContactByPhone } from "@/lib/services/contacts-service";
 import { setContactAccessSecret } from "@/lib/services/access-service";
-import { buildCourseEditorEditorHref } from "@/lib/dashboard/course-editor-navigation";
 import { buildReorderUpdates } from "@/lib/dashboard/course-reorder";
 import {
   buildCourseStepCreateData,
