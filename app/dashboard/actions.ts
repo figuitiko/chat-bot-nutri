@@ -417,10 +417,16 @@ export async function createOrUpdateStepAction(formData: FormData) {
   };
 
   if (input.stepId) {
-    await db.courseStep.update({
-      where: { id: input.stepId },
-      data: buildCourseStepUpdateData(stepInput),
-    });
+    await db.$transaction([
+      db.courseStep.update({
+        where: { id: input.stepId },
+        data: buildCourseStepUpdateData(stepInput),
+      }),
+      db.messageTemplate.updateMany({
+        where: { key: input.slug },
+        data: { twilioContentSid: null },
+      }),
+    ]);
 
     redirectToCourse(input.courseId, {
       moduleSlug: getEditorState(formData).moduleSlug,
