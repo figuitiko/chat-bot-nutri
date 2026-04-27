@@ -311,6 +311,7 @@ export default async function CourseEditorPage({
               </Card>
             ) : (
               <CourseEditorStepNavigation
+                moduleId={selectedModule.id}
                 moduleTitle={selectedModule.title}
                 stepCount={selectedModule.steps.length}
                 steps={selectedModule.steps.map((step, stepIndex) => ({
