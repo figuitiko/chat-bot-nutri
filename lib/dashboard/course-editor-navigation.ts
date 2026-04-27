@@ -34,6 +34,32 @@ export interface CourseEditorNavigationState<Module extends CourseEditorModuleBa
 }
 
 
+
+export function buildCourseEditorHref(
+  courseId: string,
+  options: { moduleSlug?: string | null; stepSlug?: string | null } = {},
+) {
+  const params = new URLSearchParams();
+
+  if (options.moduleSlug) {
+    params.set("module", options.moduleSlug);
+  }
+
+  if (options.stepSlug) {
+    params.set("step", options.stepSlug);
+  }
+
+  const query = params.toString();
+  return query ? `/dashboard/courses/${courseId}?${query}` : `/dashboard/courses/${courseId}`;
+}
+
+
+export function buildCourseEditorEditorHref(
+  courseId: string,
+  options: { moduleSlug?: string | null; stepSlug?: string | null } = {},
+) {
+  return `${buildCourseEditorHref(courseId, options)}#step-editor`;
+}
 export function getCourseEditorSelectionKey(moduleId?: string | null, stepId?: string | null) {
   return `${moduleId ?? "no-module"}:${stepId ?? "no-step"}`;
 }

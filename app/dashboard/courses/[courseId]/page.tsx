@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronLeft, ChevronRight, Layers3, ListTree, Plus, Sparkles } from "lucide-react";
+import { Layers3, ListTree, Plus, Sparkles } from "lucide-react";
 
 import {
   activateCourseAction,
@@ -11,6 +11,7 @@ import {
   uploadAssetAction,
 } from "@/app/dashboard/actions";
 import { EmptyState } from "@/components/dashboard/empty-state";
+import { CourseEditorStepNavigation, CourseEditorStepPager } from "@/components/dashboard/course-editor-step-navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,9 +21,9 @@ import { Select } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  buildCourseEditorHref,
   getCourseEditorNavigation,
   getCourseEditorSelectionKey,
-  getCourseEditorStepItemClasses,
 } from "@/lib/dashboard/course-editor-navigation";
 import { estimateOutboundMessagesForStep } from "@/lib/services/course-delivery";
 import { summarizeSurveySubmissions } from "@/lib/services/course-survey";
@@ -30,21 +31,6 @@ import { db } from "@/lib/db";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
-
-function getEditorHref(courseId: string, moduleSlug?: string | null, stepSlug?: string | null) {
-  const params = new URLSearchParams();
-
-  if (moduleSlug) {
-    params.set("module", moduleSlug);
-  }
-
-  if (stepSlug) {
-    params.set("step", stepSlug);
-  }
-
-  const query = params.toString();
-  return query ? `/dashboard/courses/${courseId}?${query}` : `/dashboard/courses/${courseId}`;
-}
 
 export default async function CourseEditorPage({
   params,
@@ -145,6 +131,8 @@ export default async function CourseEditorPage({
           <div className="grid gap-4">
             <form action={updateCourseAction} className="grid gap-4" aria-describedby="course-editor-help">
               <input type="hidden" name="id" value={course.id} />
+              <input type="hidden" name="moduleSlug" value={selectedModule?.slug ?? ""} />
+              <input type="hidden" name="stepSlug" value={selectedStep?.slug ?? ""} />
               <p id="course-editor-help" className="text-sm text-slate-500">
                 Edita esta version en borrador o activa el curso cuando todos los modulos, pasos y evaluaciones esten completos.
               </p>
@@ -180,6 +168,8 @@ export default async function CourseEditorPage({
             {!course.isActive ? (
               <form action={activateCourseAction} className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4">
                 <input type="hidden" name="courseId" value={course.id} />
+                <input type="hidden" name="moduleSlug" value={selectedModule?.slug ?? ""} />
+                <input type="hidden" name="stepSlug" value={selectedStep?.slug ?? ""} />
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                   <div>
                     <p className="font-medium text-slate-950">Publicacion controlada</p>
@@ -208,6 +198,8 @@ export default async function CourseEditorPage({
             ) : null}
             <form action={uploadAssetAction} className="space-y-3">
               <input type="hidden" name="courseId" value={course.id} />
+              <input type="hidden" name="moduleSlug" value={selectedModule?.slug ?? ""} />
+              <input type="hidden" name="stepSlug" value={selectedStep?.slug ?? ""} />
               <input type="hidden" name="targetType" value="course" />
               <input type="hidden" name="targetId" value={course.id} />
               <input type="hidden" name="kind" value="IMAGE" />
@@ -275,7 +267,8 @@ export default async function CourseEditorPage({
                             ? "border-emerald-300 bg-emerald-50 text-emerald-950"
                             : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50",
                         )}
-                        href={getEditorHref(course.id, module.slug, firstStep?.slug)}
+                        href={buildCourseEditorHref(course.id, { moduleSlug: module.slug, stepSlug: firstStep?.slug })}
+                        scroll={false}
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div>
@@ -297,64 +290,40 @@ export default async function CourseEditorPage({
           </Card>
 
           {selectedModule ? (
-            <Card>
-              <CardHeader>
-                <div className="flex items-center gap-2">
-                  <ListTree className="size-4 text-emerald-600" />
-                  <CardTitle>Pasos del modulo</CardTitle>
-                </div>
-                <CardDescription>
-                  {selectedModule.title} · {selectedModule.steps.length} paso{selectedModule.steps.length === 1 ? "" : "s"}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-2">
-                {selectedModule.steps.length === 0 ? (
+            selectedModule.steps.length === 0 ? (
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    <ListTree className="size-4 text-emerald-600" />
+                    <CardTitle>Pasos del módulo</CardTitle>
+                  </div>
+                  <CardDescription>
+                    {selectedModule.title} · {selectedModule.steps.length} pasos
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
                   <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">
-                    Este modulo no tiene pasos todavia. Crea uno nuevo abajo y arrancamos.
+                    Este módulo no tiene pasos todavía. Crea uno nuevo abajo y arrancamos.
                   </p>
-                ) : (
-                  selectedModule.steps.map((step, stepIndex) => {
-                    const isActive = step.id === selectedStep?.id;
-
-                    return (
-                      <Link
-                        key={step.id}
-                        aria-current={isActive ? "step" : undefined}
-                        className={cn(
-                          getCourseEditorStepItemClasses(isActive),
-                          "px-4 py-3",
-                        )}
-                        href={getEditorHref(course.id, selectedModule.slug, step.slug)}
-                      >
-                        <p
-                          className={cn(
-                            "text-xs font-medium uppercase tracking-wide",
-                            isActive ? "text-emerald-700" : "text-slate-500",
-                          )}
-                        >
-                          Paso {stepIndex + 1}
-                        </p>
-                        <div className="mt-2 flex items-start justify-between gap-3">
-                          <p
-                            className={cn(
-                              "min-w-0 text-sm font-semibold leading-5",
-                              isActive ? "text-emerald-950" : "text-slate-900",
-                            )}
-                          >
-                            {step.title}
-                          </p>
-                          <Badge
-                            variant={step.deliveryMode === "MEDIA_FIRST" ? "warning" : step.deliveryMode === "LINK_ONLY" ? "default" : "success"}
-                          >
-                            {step.deliveryMode}
-                          </Badge>
-                        </div>
-                      </Link>
-                    );
-                  })
-                )}
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            ) : (
+              <CourseEditorStepNavigation
+                moduleTitle={selectedModule.title}
+                stepCount={selectedModule.steps.length}
+                steps={selectedModule.steps.map((step, stepIndex) => ({
+                  id: step.id,
+                  title: step.title,
+                  deliveryMode: step.deliveryMode,
+                  href: buildCourseEditorHref(course.id, {
+                    moduleSlug: selectedModule.slug,
+                    stepSlug: step.slug,
+                  }),
+                  isActive: step.id === selectedStep?.id,
+                  index: stepIndex + 1,
+                }))}
+              />
+            )
           ) : null}
 
           <Card>
@@ -368,6 +337,8 @@ export default async function CourseEditorPage({
             <CardContent>
               <form action={createOrUpdateModuleAction} className="grid gap-3">
                 <input type="hidden" name="courseId" value={course.id} />
+                <input type="hidden" name="moduleSlug" value={selectedModule?.slug ?? ""} />
+                <input type="hidden" name="stepSlug" value={selectedStep?.slug ?? ""} />
                 <Input name="title" placeholder="Nuevo modulo" />
                 <Input name="slug" placeholder="nuevo-modulo" />
                 <Textarea name="summary" placeholder="Resumen del modulo" />
@@ -395,6 +366,8 @@ export default async function CourseEditorPage({
                 <form action={createOrUpdateModuleAction} className="grid gap-3">
                   <input type="hidden" name="courseId" value={course.id} />
                   <input type="hidden" name="moduleId" value={selectedModule.id} />
+                  <input type="hidden" name="moduleSlug" value={selectedModule.slug} />
+                  <input type="hidden" name="stepSlug" value={selectedStep?.slug ?? ""} />
                   <Input name="title" defaultValue={selectedModule.title} />
                   <Input name="slug" defaultValue={selectedModule.slug} />
                   <Textarea name="summary" defaultValue={selectedModule.summary ?? ""} />
@@ -419,6 +392,8 @@ export default async function CourseEditorPage({
                   )}
                   <form action={uploadAssetAction} className="grid gap-2">
                     <input type="hidden" name="courseId" value={course.id} />
+                    <input type="hidden" name="moduleSlug" value={selectedModule.slug} />
+                    <input type="hidden" name="stepSlug" value={selectedStep?.slug ?? ""} />
                     <input type="hidden" name="targetType" value="module" />
                     <input type="hidden" name="targetId" value={selectedModule.id} />
                     <input type="hidden" name="kind" value="IMAGE" />
@@ -432,7 +407,7 @@ export default async function CourseEditorPage({
             </Card>
           ) : null}
 
-          <Card>
+          <Card id="step-editor">
             <CardHeader>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -457,40 +432,29 @@ export default async function CourseEditorPage({
                   </div>
                 ) : null}
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button asChild size="sm" variant="outline">
-                  <Link
-                    aria-disabled={!navigation.previousStep}
-                    className={!navigation.previousStep ? "pointer-events-none opacity-50" : undefined}
-                    href={
-                      navigation.previousStep
-                        ? getEditorHref(
-                            course.id,
-                            navigation.previousStep.module.slug,
-                            navigation.previousStep.step.slug,
-                          )
-                        : getEditorHref(course.id, selectedModule?.slug)
-                    }
-                  >
-                    <ChevronLeft className="mr-1 size-4" />
-                    Anterior
-                  </Link>
-                </Button>
-                <Button asChild size="sm" variant="outline">
-                  <Link
-                    aria-disabled={!navigation.nextStep}
-                    className={!navigation.nextStep ? "pointer-events-none opacity-50" : undefined}
-                    href={
-                      navigation.nextStep
-                        ? getEditorHref(course.id, navigation.nextStep.module.slug, navigation.nextStep.step.slug)
-                        : getEditorHref(course.id, selectedModule?.slug, selectedStep?.slug)
-                    }
-                  >
-                    Siguiente
-                    <ChevronRight className="ml-1 size-4" />
-                  </Link>
-                </Button>
-              </div>
+              <CourseEditorStepPager
+                previous={{
+                  disabled: !navigation.previousStep,
+                  href: navigation.previousStep
+                    ? buildCourseEditorHref(course.id, {
+                        moduleSlug: navigation.previousStep.module.slug,
+                        stepSlug: navigation.previousStep.step.slug,
+                      })
+                    : buildCourseEditorHref(course.id, { moduleSlug: selectedModule?.slug }),
+                }}
+                next={{
+                  disabled: !navigation.nextStep,
+                  href: navigation.nextStep
+                    ? buildCourseEditorHref(course.id, {
+                        moduleSlug: navigation.nextStep.module.slug,
+                        stepSlug: navigation.nextStep.step.slug,
+                      })
+                    : buildCourseEditorHref(course.id, {
+                        moduleSlug: selectedModule?.slug,
+                        stepSlug: selectedStep?.slug,
+                      }),
+                }}
+              />
             </CardHeader>
             <CardContent className="grid gap-4">
               {!selectedModule ? (
@@ -514,6 +478,8 @@ export default async function CourseEditorPage({
                   >
                     <input type="hidden" name="courseId" value={course.id} />
                     <input type="hidden" name="moduleId" value={selectedModule.id} />
+                    <input type="hidden" name="moduleSlug" value={selectedModule.slug} />
+                    <input type="hidden" name="stepSlug" value="" />
                     <p id={`${selectedModule.id}-new-step-help`} className="text-sm text-slate-500">
                       Los pasos nuevos se agregan al final del modulo y luego puedes enlazarlos con transiciones.
                     </p>
@@ -562,6 +528,8 @@ export default async function CourseEditorPage({
                     <input type="hidden" name="courseId" value={course.id} />
                     <input type="hidden" name="moduleId" value={selectedModule.id} />
                     <input type="hidden" name="stepId" value={selectedStep.id} />
+                    <input type="hidden" name="moduleSlug" value={selectedModule.slug} />
+                    <input type="hidden" name="stepSlug" value={selectedStep.slug} />
                     <p id={`${selectedStep.id}-step-help`} className="text-sm text-slate-500">
                       Ajusta el tipo de paso, su forma de entrega y como debe capturar respuestas o puntajes.
                     </p>
@@ -632,6 +600,8 @@ export default async function CourseEditorPage({
 
                   <form action={uploadAssetAction} className="flex flex-wrap items-center gap-2 rounded-2xl bg-slate-50 p-4">
                     <input type="hidden" name="courseId" value={course.id} />
+                    <input type="hidden" name="moduleSlug" value={selectedModule.slug} />
+                    <input type="hidden" name="stepSlug" value={selectedStep.slug} />
                     <input type="hidden" name="targetType" value="step" />
                     <input type="hidden" name="targetId" value={selectedStep.id} />
                     <input type="hidden" name="kind" value="IMAGE" />
@@ -659,6 +629,8 @@ export default async function CourseEditorPage({
                   <form action={createTransitionAction} className="grid gap-3 rounded-xl border border-dashed border-slate-200 p-3">
                     <input type="hidden" name="courseId" value={course.id} />
                     <input type="hidden" name="stepId" value={selectedStep.id} />
+                    <input type="hidden" name="moduleSlug" value={selectedModule.slug} />
+                    <input type="hidden" name="stepSlug" value={selectedStep.slug} />
                     <div className="grid gap-3 md:grid-cols-2">
                       <Input name="pattern" placeholder="Patron de entrada" />
                       <Select name="matchType" defaultValue="EXACT">
@@ -700,6 +672,8 @@ export default async function CourseEditorPage({
                   >
                     <input type="hidden" name="courseId" value={course.id} />
                     <input type="hidden" name="moduleId" value={selectedModule.id} />
+                    <input type="hidden" name="moduleSlug" value={selectedModule.slug} />
+                    <input type="hidden" name="stepSlug" value={selectedStep?.slug ?? ""} />
                     <p id={`${selectedModule.id}-new-step-help`} className="text-sm text-slate-500">
                       Los pasos nuevos se agregan al final del modulo y luego puedes enlazarlos con transiciones.
                     </p>

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildCourseEditorEditorHref,
+  buildCourseEditorHref,
   getCourseEditorNavigation,
   getCourseEditorSelectionKey,
   getCourseEditorStepItemClasses,
@@ -21,9 +23,7 @@ const modules: CourseEditorModuleBase[] = [
     id: "m2",
     slug: "modulo-2",
     title: "Modulo 2",
-    steps: [
-      { id: "s3", slug: "tema-1", title: "Tema 1" },
-    ],
+    steps: [{ id: "s3", slug: "tema-1", title: "Tema 1" }],
   },
   {
     id: "m3",
@@ -95,7 +95,6 @@ describe("getCourseEditorStepItemClasses", () => {
   });
 });
 
-
 describe("getCourseEditorSelectionKey", () => {
   it("changes when the selected step changes so uncontrolled editor fields remount", () => {
     expect(getCourseEditorSelectionKey("m1", "s1")).not.toBe(
@@ -106,5 +105,44 @@ describe("getCourseEditorSelectionKey", () => {
   it("falls back safely when there is no selected step", () => {
     expect(getCourseEditorSelectionKey("m1", null)).toBe("m1:no-step");
     expect(getCourseEditorSelectionKey(null, null)).toBe("no-module:no-step");
+  });
+});
+
+describe("buildCourseEditorHref", () => {
+  it("preserves module and step in the generated editor url", () => {
+    expect(
+      buildCourseEditorHref("course-1", {
+        moduleSlug: "modulo-1",
+        stepSlug: "paso-6",
+      }),
+    ).toBe("/dashboard/courses/course-1?module=modulo-1&step=paso-6");
+  });
+
+  it("omits missing params without leaving broken query strings", () => {
+    expect(buildCourseEditorHref("course-1", { moduleSlug: "modulo-1" })).toBe(
+      "/dashboard/courses/course-1?module=modulo-1",
+    );
+    expect(buildCourseEditorHref("course-1", {})).toBe(
+      "/dashboard/courses/course-1",
+    );
+  });
+});
+
+describe("buildCourseEditorEditorHref", () => {
+  it("adds the editor anchor so redirects land back on the form", () => {
+    expect(
+      buildCourseEditorEditorHref("course-1", {
+        moduleSlug: "modulo-1",
+        stepSlug: "paso-6",
+      }),
+    ).toBe(
+      "/dashboard/courses/course-1?module=modulo-1&step=paso-6#step-editor",
+    );
+  });
+
+  it("still works when there is no selected step yet", () => {
+    expect(
+      buildCourseEditorEditorHref("course-1", { moduleSlug: "modulo-1" }),
+    ).toBe("/dashboard/courses/course-1?module=modulo-1#step-editor");
   });
 });

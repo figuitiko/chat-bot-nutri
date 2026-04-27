@@ -22,6 +22,11 @@ import { AppError } from "@/lib/http";
 import { normalizePhone } from "@/lib/phone";
 import { upsertContactByPhone } from "@/lib/services/contacts-service";
 import { setContactAccessSecret } from "@/lib/services/access-service";
+import { buildCourseEditorEditorHref } from "@/lib/dashboard/course-editor-navigation";
+import {
+  buildCourseStepCreateData,
+  buildCourseStepUpdateData,
+} from "@/lib/dashboard/course-step-write-data";
 import { slugify } from "@/lib/utils";
 
 const courseInputSchema = z.object({
@@ -90,11 +95,21 @@ const enrollmentInputSchema = z.object({
   courseId: z.string().min(1),
 });
 
-function redirectToCourse(courseId: string) {
+function redirectToCourse(
+  courseId: string,
+  editorState?: { moduleSlug?: string | null; stepSlug?: string | null },
+) {
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/courses");
   revalidatePath(`/dashboard/courses/${courseId}`);
-  redirect(`/dashboard/courses/${courseId}`);
+  redirect(buildCourseEditorEditorHref(courseId, editorState));
+}
+
+function getEditorState(formData: FormData) {
+  const moduleSlug = String(formData.get("moduleSlug") ?? "").trim() || null;
+  const stepSlug = String(formData.get("stepSlug") ?? "").trim() || null;
+
+  return { moduleSlug, stepSlug };
 }
 
 function redirectToContact(contactId: string) {
@@ -127,17 +142,29 @@ async function validateCourseActivation(courseId: string) {
   }
 
   if (course.modules.length === 0) {
-    throw new AppError("COURSE_INVALID", "El curso debe tener al menos un modulo.", 422);
+    throw new AppError(
+      "COURSE_INVALID",
+      "El curso debe tener al menos un modulo.",
+      422,
+    );
   }
 
   const steps = course.modules.flatMap((module) => module.steps);
 
   if (steps.length === 0) {
-    throw new AppError("COURSE_INVALID", "El curso debe tener al menos un paso.", 422);
+    throw new AppError(
+      "COURSE_INVALID",
+      "El curso debe tener al menos un paso.",
+      422,
+    );
   }
 
   for (const step of steps) {
-    if (step.deliveryMode === "MEDIA_FIRST" && !step.mediaUrl && !step.mediaAssetId) {
+    if (
+      step.deliveryMode === "MEDIA_FIRST" &&
+      !step.mediaUrl &&
+      !step.mediaAssetId
+    ) {
       throw new AppError(
         "COURSE_INVALID",
         `El paso "${step.title}" usa MEDIA_FIRST pero no tiene un asset configurado.`,
@@ -155,7 +182,9 @@ async function validateCourseActivation(courseId: string) {
   }
 
   const assessmentSteps = steps.filter((step) => step.assessmentKey);
-  const assessmentKeys = new Set(assessmentSteps.map((step) => step.assessmentKey));
+  const assessmentKeys = new Set(
+    assessmentSteps.map((step) => step.assessmentKey),
+  );
 
   for (const assessmentKey of assessmentKeys) {
     if (!assessmentKey) {
@@ -163,12 +192,18 @@ async function validateCourseActivation(courseId: string) {
     }
 
     const questions = steps.filter(
-      (step) => step.assessmentKey === assessmentKey && step.correctAnswer && step.captureKey,
+      (step) =>
+        step.assessmentKey === assessmentKey &&
+        step.correctAnswer &&
+        step.captureKey,
     );
     const results = steps.filter(
       (step) => step.assessmentKey === assessmentKey && step.isAssessmentResult,
     );
-    const totalWeight = questions.reduce((sum, step) => sum + (step.scoreWeight ?? 0), 0);
+    const totalWeight = questions.reduce(
+      (sum, step) => sum + (step.scoreWeight ?? 0),
+      0,
+    );
 
     if (questions.length === 0 || results.length === 0) {
       throw new AppError(
@@ -223,7 +258,11 @@ export async function updateCourseAction(formData: FormData) {
   });
 
   if (!input.id) {
-    throw new AppError("COURSE_NOT_FOUND", "Falta el identificador del curso.", 422);
+    throw new AppError(
+      "COURSE_NOT_FOUND",
+      "Falta el identificador del curso.",
+      422,
+    );
   }
 
   await db.course.update({
@@ -236,7 +275,7 @@ export async function updateCourseAction(formData: FormData) {
     },
   });
 
-  redirectToCourse(input.id);
+  redirectToCourse(input.id, getEditorState(formData));
 }
 
 export async function activateCourseAction(formData: FormData) {
@@ -268,7 +307,7 @@ export async function activateCourseAction(formData: FormData) {
     }),
   ]);
 
-  redirectToCourse(courseId);
+  redirectToCourse(courseId, getEditorState(formData));
 }
 
 export async function archiveCourseAction(formData: FormData) {
@@ -325,7 +364,7 @@ export async function createOrUpdateModuleAction(formData: FormData) {
     });
   }
 
-  redirectToCourse(input.courseId);
+  redirectToCourse(input.courseId, getEditorState(formData));
 }
 
 export async function createOrUpdateStepAction(formData: FormData) {
@@ -352,7 +391,7 @@ export async function createOrUpdateStepAction(formData: FormData) {
     isTerminal: formData.get("isTerminal") === "on",
   });
 
-  const data: Prisma.CourseStepUncheckedCreateInput = {
+  const stepInput = {
     moduleId: input.moduleId,
     title: input.title,
     slug: input.slug,
@@ -362,36 +401,42 @@ export async function createOrUpdateStepAction(formData: FormData) {
     deliveryMode: input.deliveryMode,
     renderMode: input.renderMode,
     inputType: input.inputType,
-    mediaUrl: input.mediaUrl || null,
-    captureKey: input.captureKey || null,
-    assessmentKey: input.assessmentKey || null,
-    correctAnswer: input.correctAnswer || null,
-    scoreWeight: input.scoreWeight ?? null,
+    mediaUrl: input.mediaUrl,
+    captureKey: input.captureKey,
+    assessmentKey: input.assessmentKey,
+    correctAnswer: input.correctAnswer,
+    scoreWeight: input.scoreWeight,
     isAssessmentResult: input.isAssessmentResult,
     isTerminal: input.isTerminal,
-    isActive: true,
-    sortOrder: 1,
   };
 
   if (input.stepId) {
     await db.courseStep.update({
       where: { id: input.stepId },
-      data,
-    });
-  } else {
-    const sortOrder = await db.courseStep.count({
-      where: { moduleId: input.moduleId },
+      data: buildCourseStepUpdateData(stepInput),
     });
 
-    await db.courseStep.create({
-      data: {
-        ...data,
-        sortOrder: sortOrder + 1,
-      },
+    redirectToCourse(input.courseId, {
+      moduleSlug: getEditorState(formData).moduleSlug,
+      stepSlug: input.slug,
     });
+    return;
   }
 
-  redirectToCourse(input.courseId);
+  const sortOrder = await db.courseStep.count({
+    where: { moduleId: input.moduleId },
+  });
+
+  await db.courseStep.create({
+    data: {
+      ...buildCourseStepCreateData(stepInput, sortOrder + 1),
+    },
+  });
+
+  redirectToCourse(input.courseId, {
+    moduleSlug: getEditorState(formData).moduleSlug,
+    stepSlug: input.slug,
+  });
 }
 
 export async function createTransitionAction(formData: FormData) {
@@ -423,7 +468,7 @@ export async function createTransitionAction(formData: FormData) {
     },
   });
 
-  redirectToCourse(input.courseId);
+  redirectToCourse(input.courseId, getEditorState(formData));
 }
 
 export async function uploadAssetAction(formData: FormData) {
@@ -483,7 +528,7 @@ export async function uploadAssetAction(formData: FormData) {
     });
   }
 
-  redirectToCourse(courseId);
+  redirectToCourse(courseId, getEditorState(formData));
 }
 
 export async function createContactAction(formData: FormData) {
