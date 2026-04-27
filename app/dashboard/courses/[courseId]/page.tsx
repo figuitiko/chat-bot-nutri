@@ -3,6 +3,7 @@ import { Layers3, ListTree, Plus, Sparkles } from "lucide-react";
 
 import {
   activateCourseAction,
+  clearCourseTwilioCacheAction,
   createOrUpdateModuleAction,
   createOrUpdateStepAction,
   createTransitionAction,
@@ -166,6 +167,21 @@ export default async function CourseEditorPage({
                 <div className="flex items-end gap-2">
                   <Button type="submit">Guardar curso</Button>
                 </div>
+              </div>
+            </form>
+
+            <form action={clearCourseTwilioCacheAction} className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4">
+              <input type="hidden" name="courseId" value={course.id} />
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="font-medium text-slate-950">Caché de Twilio</p>
+                  <p className="text-sm text-slate-600">
+                    Si tus cambios no aparecen en el chat, limpiá el caché para que Twilio regenere los templates.
+                  </p>
+                </div>
+                <Button type="submit" variant="outline">
+                  Limpiar caché
+                </Button>
               </div>
             </form>
 

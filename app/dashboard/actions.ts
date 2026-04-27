@@ -545,6 +545,25 @@ export async function reorderModulesAction(courseId: string, orderedIds: string[
   );
 }
 
+export async function clearCourseTwilioCacheAction(formData: FormData) {
+  await requireAdminSession();
+
+  const courseId = String(formData.get("courseId") ?? "");
+  if (!courseId) throw new AppError("MISSING_COURSE_ID", "courseId required", 400);
+
+  const slugs = await db.courseStep
+    .findMany({ where: { module: { courseId } }, select: { slug: true } })
+    .then((rows) => rows.map((r) => r.slug));
+
+  await db.messageTemplate.updateMany({
+    where: { key: { in: slugs } },
+    data: { twilioContentSid: null },
+  });
+
+  revalidatePath(`/dashboard/courses/${courseId}`);
+  redirect(`/dashboard/courses/${courseId}`);
+}
+
 export async function uploadAssetAction(formData: FormData) {
   await requireAdminSession();
 

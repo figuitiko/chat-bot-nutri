@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import {
   DndContext,
@@ -33,7 +33,7 @@ interface ModuleNavItem {
   index: number;
 }
 
-function SortableModuleItem({ module: mod }: { module: ModuleNavItem }) {
+function SortableModuleItem({ module: mod, index }: { module: ModuleNavItem; index: number }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: mod.id,
   });
@@ -69,7 +69,7 @@ function SortableModuleItem({ module: mod }: { module: ModuleNavItem }) {
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-sm font-semibold">
-              Modulo {mod.index} · {mod.title}
+              Modulo {index} · {mod.title}
             </p>
             <p className="mt-1 text-xs text-slate-500">
               {mod.stepCount} paso{mod.stepCount === 1 ? "" : "s"}
@@ -90,17 +90,24 @@ export function CourseModuleList({
   modules: ModuleNavItem[];
 }) {
   const [, startTransition] = useTransition();
+  const [localModules, setLocalModules] = useState(modules);
+
+  useEffect(() => {
+    setLocalModules(modules);
+  }, [modules]);
+
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
-    const oldIndex = modules.findIndex((m) => m.id === active.id);
-    const newIndex = modules.findIndex((m) => m.id === over.id);
-    const reordered = arrayMove(modules, oldIndex, newIndex);
-    const orderedIds = reordered.map((m) => m.id);
+    const oldIndex = localModules.findIndex((m) => m.id === active.id);
+    const newIndex = localModules.findIndex((m) => m.id === over.id);
+    const reordered = arrayMove(localModules, oldIndex, newIndex);
+    setLocalModules(reordered);
 
+    const orderedIds = reordered.map((m) => m.id);
     startTransition(async () => {
       await reorderModulesAction(courseId, orderedIds);
     });
@@ -108,10 +115,10 @@ export function CourseModuleList({
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-      <SortableContext items={modules.map((m) => m.id)} strategy={verticalListSortingStrategy}>
+      <SortableContext items={localModules.map((m) => m.id)} strategy={verticalListSortingStrategy}>
         <div className="grid gap-2">
-          {modules.map((mod) => (
-            <SortableModuleItem key={mod.id} module={mod} />
+          {localModules.map((mod, i) => (
+            <SortableModuleItem key={mod.id} module={mod} index={i + 1} />
           ))}
         </div>
       </SortableContext>

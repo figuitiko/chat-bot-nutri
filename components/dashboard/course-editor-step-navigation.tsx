@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import {
   DndContext,
@@ -39,7 +39,7 @@ interface PagerLink {
   disabled: boolean;
 }
 
-function SortableStepItem({ step }: { step: StepNavItem }) {
+function SortableStepItem({ step, index }: { step: StepNavItem; index: number }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: step.id,
   });
@@ -66,7 +66,7 @@ function SortableStepItem({ step }: { step: StepNavItem }) {
         href={step.href}
         scroll={false}
       >
-        <span className="font-medium">{step.index}. {step.title}</span>
+        <span className="font-medium">{index}. {step.title}</span>
         <Badge className="ml-2 text-xs">{step.deliveryMode}</Badge>
       </Link>
     </div>
@@ -86,10 +86,15 @@ export function CourseEditorStepNavigation({
 }) {
   const activeRef = useRef<HTMLDivElement>(null);
   const [, startTransition] = useTransition();
+  const [localSteps, setLocalSteps] = useState(steps);
+
+  useEffect(() => {
+    setLocalSteps(steps);
+  }, [steps]);
 
   useEffect(() => {
     activeRef.current?.scrollIntoView({ block: "nearest" });
-  }, [steps]);
+  }, [localSteps]);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
@@ -97,11 +102,12 @@ export function CourseEditorStepNavigation({
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
-    const oldIndex = steps.findIndex((s) => s.id === active.id);
-    const newIndex = steps.findIndex((s) => s.id === over.id);
-    const reordered = arrayMove(steps, oldIndex, newIndex);
-    const orderedIds = reordered.map((s) => s.id);
+    const oldIndex = localSteps.findIndex((s) => s.id === active.id);
+    const newIndex = localSteps.findIndex((s) => s.id === over.id);
+    const reordered = arrayMove(localSteps, oldIndex, newIndex);
+    setLocalSteps(reordered);
 
+    const orderedIds = reordered.map((s) => s.id);
     startTransition(async () => {
       await reorderStepsAction(moduleId, orderedIds);
     });
@@ -115,10 +121,10 @@ export function CourseEditorStepNavigation({
       </CardHeader>
       <CardContent>
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext items={steps.map((s) => s.id)} strategy={verticalListSortingStrategy}>
+          <SortableContext items={localSteps.map((s) => s.id)} strategy={verticalListSortingStrategy}>
             <div ref={activeRef} className="grid gap-1">
-              {steps.map((step) => (
-                <SortableStepItem key={step.id} step={step} />
+              {localSteps.map((step, i) => (
+                <SortableStepItem key={step.id} step={step} index={i + 1} />
               ))}
             </div>
           </SortableContext>
