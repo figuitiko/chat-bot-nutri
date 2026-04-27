@@ -2,6 +2,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 
 import { PrismaClient } from "@/generated/prisma/client";
 import { env } from "@/lib/env";
+import { shouldReusePrismaClient } from "@/lib/prisma-client-cache";
 
 const globalForPrisma = globalThis as typeof globalThis & {
   prisma?: PrismaClient;
@@ -18,8 +19,15 @@ function createPrismaClient() {
   });
 }
 
-export const db =
-  globalForPrisma.prisma ?? createPrismaClient();
+function getPrismaClient() {
+  if (shouldReusePrismaClient(globalForPrisma.prisma)) {
+    return globalForPrisma.prisma as PrismaClient;
+  }
+
+  return createPrismaClient();
+}
+
+export const db = getPrismaClient();
 
 if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = db;

@@ -118,6 +118,7 @@ model Contact {
   conversations  Conversation[]
   enrollments    CourseEnrollment[]
   messages       Message[]
+  surveySubmissions CourseSurveySubmission[]
 }
 
 model ContactAccessCredential {
@@ -164,6 +165,7 @@ model Course {
   modules         CourseModule[]
   conversations   Conversation[]
   selectedInConversations Conversation[] @relation("ConversationSelectedCourse")
+  surveySubmissions CourseSurveySubmission[]
 
   @@index([status, isActive])
 }
@@ -378,12 +380,33 @@ model Conversation {
   currentCourseStep CourseStep?    @relation("ConversationCurrentCourseStep", fields: [currentCourseStepId], references: [id], onDelete: SetNull)
   currentStep   BotFlowStep?       @relation("ConversationCurrentStep", fields: [currentStepId], references: [id], onDelete: SetNull)
   messages      Message[]
+  surveySubmission CourseSurveySubmission?
 
   @@unique([contactId, flowId])
   @@unique([contactId, courseId])
   @@index([contactId])
   @@index([courseId])
   @@index([selectedCourseId])
+}
+
+model CourseSurveySubmission {
+  id            String   @id @default(cuid())
+  courseId       String
+  contactId      String
+  conversationId String   @unique
+  submittedAt    DateTime @default(now())
+  answers        Json
+  questionCount  Int
+  averageScore   Float
+  totalScore     Int
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  course         Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  contact        Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([courseId, submittedAt])
+  @@index([contactId, submittedAt])
 }
 
 model Message {

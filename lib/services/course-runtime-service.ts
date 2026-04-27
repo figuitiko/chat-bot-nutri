@@ -25,6 +25,7 @@ import {
   estimateOutboundMessagesForStep,
   shouldPauseForTwilioBurst,
 } from "@/lib/services/course-delivery";
+import { persistCourseSurveySubmission } from "@/lib/services/course-survey";
 import {
   createWhatsAppInteractiveTemplate,
   sendWhatsAppTemplateMessage,
@@ -926,6 +927,23 @@ export async function progressCourseConversation(input: {
 
   const nextStep = transition.nextStep;
   const variables = await buildConversationVariables(readConversationContext(contextData), nextStep);
+
+  if (nextStep.isTerminal) {
+    persistCourseSurveySubmission({
+      contactId: conversation.contactId,
+      conversationId: conversation.id,
+      courseId: nextStep.module.courseId,
+      contextData: readConversationContext(contextData),
+    }).catch((error: unknown) => {
+      logger.error("course.survey_submission.persist_failed", {
+        contactId: conversation.contactId,
+        conversationId: conversation.id,
+        courseId: nextStep.module.courseId,
+        error,
+      });
+    });
+  }
+
   const pauseResult = await maybePauseCourseConversationStep({
     conversationId: conversation.id,
     contactId: conversation.contactId,

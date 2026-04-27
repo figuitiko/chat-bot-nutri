@@ -21,6 +21,7 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { getCourseEditorNavigation } from "@/lib/dashboard/course-editor-navigation";
 import { estimateOutboundMessagesForStep } from "@/lib/services/course-delivery";
+import { summarizeSurveySubmissions } from "@/lib/services/course-survey";
 import { db } from "@/lib/db";
 import { cn } from "@/lib/utils";
 
@@ -81,6 +82,21 @@ export default async function CourseEditorPage({
     notFound();
   }
 
+  const surveySubmissions = await db.courseSurveySubmission.findMany({
+    where: { courseId: course.id },
+    orderBy: { submittedAt: "desc" },
+    include: {
+      contact: {
+        select: {
+          id: true,
+          phone: true,
+          name: true,
+          profileName: true,
+        },
+      },
+    },
+  });
+
   const allSteps = course.modules.flatMap((module) => module.steps);
   const stepsWithMedia = allSteps.filter((step) => step.mediaUrl || step.mediaAssetId).length;
   const stepsWithDoubleDeliveryRisk = allSteps.filter((step) =>
@@ -90,6 +106,21 @@ export default async function CourseEditorPage({
       hasMedia: Boolean(step.mediaUrl || step.mediaAssetId),
     }) > 1,
   ).length;
+  const surveySummary = summarizeSurveySubmissions(
+    surveySubmissions.map((submission) => ({
+      answers: submission.answers as {
+        surveyQ1: number;
+        surveyQ2: number;
+        surveyQ3: number;
+        surveyQ4: number;
+        surveyQ5: number;
+        surveyQ6: number;
+      },
+      averageScore: submission.averageScore,
+      questionCount: submission.questionCount,
+      totalScore: submission.totalScore,
+    })),
+  );
   const navigation = getCourseEditorNavigation(course.modules, currentSearchParams);
   const selectedModule = navigation.selectedModule;
   const selectedStep = navigation.selectedStep;
@@ -689,6 +720,98 @@ export default async function CourseEditorPage({
                     <Button type="submit">Agregar paso</Button>
                   </form>
                 </>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Sparkles className="size-4 text-emerald-600" />
+                <CardTitle>Survey results</CardTitle>
+              </div>
+              <CardDescription>
+                Persistencia de valoraciones finales del curso con resumen y detalle por intento.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4">
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="rounded-2xl bg-slate-50 p-4">
+                  <p className="text-sm text-slate-500">Encuestas respondidas</p>
+                  <p className="text-2xl font-semibold text-slate-950">{surveySummary.totalSubmissions}</p>
+                </div>
+                <div className="rounded-2xl bg-slate-50 p-4">
+                  <p className="text-sm text-slate-500">Promedio general</p>
+                  <p className="text-2xl font-semibold text-slate-950">{surveySummary.overallAverageScore.toFixed(2)} / 5</p>
+                </div>
+                <div className="rounded-2xl bg-slate-50 p-4">
+                  <p className="text-sm text-slate-500">Puntaje total acumulado</p>
+                  <p className="text-2xl font-semibold text-slate-950">{surveySummary.overallTotalScore}</p>
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+                {Object.entries(surveySummary.questionAverages).map(([questionKey, value]) => (
+                  <div key={questionKey} className="rounded-2xl border border-slate-200 bg-white p-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{questionKey}</p>
+                    <p className="mt-1 text-lg font-semibold text-slate-950">{value.toFixed(2)}</p>
+                    <p className="text-xs text-slate-500">Promedio</p>
+                  </div>
+                ))}
+              </div>
+
+              {surveySubmissions.length === 0 ? (
+                <EmptyState
+                  eyebrow="Survey"
+                  title="Todavia no hay valoraciones guardadas"
+                  description="Cuando los learners completen la encuesta final, aqui vas a ver el resumen y el detalle por intento."
+                />
+              ) : (
+                <div className="overflow-hidden rounded-2xl border border-slate-200">
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-slate-200 text-sm">
+                      <thead className="bg-slate-50 text-left text-slate-500">
+                        <tr>
+                          <th className="px-4 py-3 font-medium">Fecha</th>
+                          <th className="px-4 py-3 font-medium">Contacto</th>
+                          <th className="px-4 py-3 font-medium">Promedio</th>
+                          <th className="px-4 py-3 font-medium">Q1</th>
+                          <th className="px-4 py-3 font-medium">Q2</th>
+                          <th className="px-4 py-3 font-medium">Q3</th>
+                          <th className="px-4 py-3 font-medium">Q4</th>
+                          <th className="px-4 py-3 font-medium">Q5</th>
+                          <th className="px-4 py-3 font-medium">Q6</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 bg-white text-slate-700">
+                        {surveySubmissions.map((submission) => {
+                          const answers = submission.answers as Record<string, number>;
+
+                          return (
+                            <tr key={submission.id}>
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                {submission.submittedAt.toLocaleString("es-MX")}
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="font-medium text-slate-950">
+                                  {submission.contact.name ?? submission.contact.profileName ?? "Sin nombre"}
+                                </div>
+                                <div className="text-xs text-slate-500">{submission.contact.phone}</div>
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap">{submission.averageScore.toFixed(2)} / 5</td>
+                              <td className="px-4 py-3 whitespace-nowrap">{answers.surveyQ1}</td>
+                              <td className="px-4 py-3 whitespace-nowrap">{answers.surveyQ2}</td>
+                              <td className="px-4 py-3 whitespace-nowrap">{answers.surveyQ3}</td>
+                              <td className="px-4 py-3 whitespace-nowrap">{answers.surveyQ4}</td>
+                              <td className="px-4 py-3 whitespace-nowrap">{answers.surveyQ5}</td>
+                              <td className="px-4 py-3 whitespace-nowrap">{answers.surveyQ6}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               )}
             </CardContent>
           </Card>
