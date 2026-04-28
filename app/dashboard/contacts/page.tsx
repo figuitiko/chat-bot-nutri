@@ -13,34 +13,56 @@ import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
+const PAGE_SIZE = 20;
+
+function buildPageHref(page: number, query: string) {
+  const params = new URLSearchParams();
+  if (query) params.set("q", query);
+  if (page > 1) params.set("page", String(page));
+  const qs = params.toString();
+  return `/dashboard/contacts${qs ? `?${qs}` : ""}`;
+}
+
 export default async function ContactsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; page?: string }>;
 }) {
-  const { q } = await searchParams;
+  const { q, page: pageParam } = await searchParams;
   const query = q?.trim() ?? "";
+  const page = Math.max(1, Number(pageParam) || 1);
+  const skip = (page - 1) * PAGE_SIZE;
 
-  const contacts = await db.contact.findMany({
-    where: query
-      ? {
-          OR: [
-            { name: { contains: query, mode: "insensitive" } },
-            { profileName: { contains: query, mode: "insensitive" } },
-            { phone: { contains: query, mode: "insensitive" } },
-          ],
-        }
-      : undefined,
-    orderBy: { updatedAt: "desc" },
-    include: {
-      accessCredential: true,
-      enrollments: {
-        where: { isActive: true },
-        include: { course: true },
+  const where = query
+    ? {
+        OR: [
+          { name: { contains: query, mode: "insensitive" as const } },
+          { profileName: { contains: query, mode: "insensitive" as const } },
+          { phone: { contains: query, mode: "insensitive" as const } },
+        ],
+      }
+    : undefined;
+
+  const [total, contacts] = await Promise.all([
+    db.contact.count({ where }),
+    db.contact.findMany({
+      where,
+      orderBy: { updatedAt: "desc" },
+      include: {
+        accessCredential: true,
+        enrollments: {
+          where: { isActive: true },
+          include: { course: true },
+        },
       },
-    },
-    take: 100,
-  });
+      skip,
+      take: PAGE_SIZE,
+    }),
+  ]);
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const hasPrev = page > 1;
+  const hasNext = page < totalPages;
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
@@ -54,7 +76,9 @@ export default async function ContactsPage({
                 a sus cursos.
               </CardDescription>
             </div>
-            <p className="text-sm text-slate-500">{contacts.length} resultado{contacts.length !== 1 ? "s" : ""}</p>
+            <p className="text-sm text-slate-500">
+              {total} resultado{total !== 1 ? "s" : ""}
+            </p>
           </div>
           <Suspense>
             <ContactSearchInput defaultValue={query} />
@@ -101,6 +125,30 @@ export default async function ContactsPage({
               </Button>
             </div>
           ))}
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between border-t border-slate-100 pt-4">
+              <p className="text-sm text-slate-500">
+                Página {page} de {totalPages}
+              </p>
+              <div className="flex gap-2">
+                <Button asChild={hasPrev} disabled={!hasPrev} size="sm" variant="outline">
+                  {hasPrev ? (
+                    <Link href={buildPageHref(page - 1, query)}>Anterior</Link>
+                  ) : (
+                    <span>Anterior</span>
+                  )}
+                </Button>
+                <Button asChild={hasNext} disabled={!hasNext} size="sm" variant="outline">
+                  {hasNext ? (
+                    <Link href={buildPageHref(page + 1, query)}>Siguiente</Link>
+                  ) : (
+                    <span>Siguiente</span>
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

@@ -564,17 +564,26 @@ export async function processInboundWebhook(payload: Record<string, string | und
   if (!state.replied) {
     await handleLegacyEngine(context, state);
   }
-  // Only run rule routing if user already has a verified/active session.
-  // Unverified users (no accessState, no active conversation) must enter their keyword first.
+  // Rule routing only for contacts actively inside a course or legacy flow.
+  // Access-flow states (awaiting_secret, awaiting_course_selection, verified) are
+  // already handled above; let them fall through to startAccessPrompt if needed.
   const hasActiveSession =
     context.activeCourseConversation ||
-    context.activeLegacyConversation ||
-    context.accessState !== null;
+    context.activeLegacyConversation;
   if (!state.replied && hasActiveSession) {
     await handleRuleRouting(context, state);
   }
   if (!state.replied) {
-    await startAccessPrompt(context, state);
+    // Only start the auth prompt if the contact has an active credential.
+    // Contacts with no credential or an inactive one are silently dropped —
+    // they cannot authenticate and should not be prompted to try.
+    const credential = await db.contactAccessCredential.findUnique({
+      where: { contactId: contact.id },
+      select: { isActive: true },
+    });
+    if (credential?.isActive) {
+      await startAccessPrompt(context, state);
+    }
   }
 
   const inboundMessage = await finalizeInboundWebhook({
