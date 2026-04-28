@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { Suspense } from "react";
 
 import { createContactAction } from "@/app/dashboard/actions";
+import { ContactSearchInput } from "@/components/dashboard/contact-search-input";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,41 +13,63 @@ import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-export default async function ContactsPage() {
+export default async function ContactsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>;
+}) {
+  const { q } = await searchParams;
+  const query = q?.trim() ?? "";
+
   const contacts = await db.contact.findMany({
-    orderBy: {
-      updatedAt: "desc",
-    },
+    where: query
+      ? {
+          OR: [
+            { name: { contains: query, mode: "insensitive" } },
+            { profileName: { contains: query, mode: "insensitive" } },
+            { phone: { contains: query, mode: "insensitive" } },
+          ],
+        }
+      : undefined,
+    orderBy: { updatedAt: "desc" },
     include: {
       accessCredential: true,
       enrollments: {
-        where: {
-          isActive: true,
-        },
-        include: {
-          course: true,
-        },
+        where: { isActive: true },
+        include: { course: true },
       },
     },
-    take: 50,
+    take: 100,
   });
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
       <Card>
         <CardHeader>
-          <CardTitle>Contactos con acceso</CardTitle>
-          <CardDescription>
-            Cada contacto usa su numero de WhatsApp como identidad y una clave secreta para entrar
-            a sus cursos.
-          </CardDescription>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <CardTitle>Contactos con acceso</CardTitle>
+              <CardDescription>
+                Cada contacto usa su numero de WhatsApp como identidad y una clave secreta para entrar
+                a sus cursos.
+              </CardDescription>
+            </div>
+            <p className="text-sm text-slate-500">{contacts.length} resultado{contacts.length !== 1 ? "s" : ""}</p>
+          </div>
+          <Suspense>
+            <ContactSearchInput defaultValue={query} />
+          </Suspense>
         </CardHeader>
         <CardContent className="grid gap-4">
           {contacts.length === 0 ? (
             <EmptyState
               eyebrow="Contactos"
-              title="Todavia no hay contactos registrados"
-              description="Crea el primer contacto con su numero de WhatsApp y despues asignale cursos y una clave de acceso."
+              title={query ? `Sin resultados para "${query}"` : "Todavia no hay contactos registrados"}
+              description={
+                query
+                  ? "Probá con otro nombre o número."
+                  : "Crea el primer contacto con su numero de WhatsApp y despues asignale cursos y una clave de acceso."
+              }
             />
           ) : null}
           {contacts.map((contact) => (

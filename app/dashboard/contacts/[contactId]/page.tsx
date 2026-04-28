@@ -1,9 +1,11 @@
 import {
   assignCourseEnrollmentAction,
+  deleteContactAction,
   revokeCourseEnrollmentAction,
   setContactSecretAction,
   updateContactAction,
 } from "@/app/dashboard/actions";
+import { DeleteConfirmButton } from "@/components/dashboard/delete-confirm-button";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -55,11 +57,22 @@ export default async function ContactDetailPage({
     <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
       <Card>
         <CardHeader>
-          <CardTitle>{contact.name || contact.profileName || contact.phone}</CardTitle>
-          <CardDescription>
-            Configura la clave de acceso del contacto y los cursos que puede seleccionar desde
-            WhatsApp.
-          </CardDescription>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <CardTitle>{contact.name || contact.profileName || contact.phone}</CardTitle>
+              <CardDescription>
+                Configura la clave de acceso del contacto y los cursos que puede seleccionar desde
+                WhatsApp.
+              </CardDescription>
+            </div>
+            <DeleteConfirmButton
+              action={deleteContactAction}
+              message={`¿Eliminar a "${contact.name || contact.phone}" y todos sus datos? Esta acción no se puede deshacer.`}
+              hiddenFields={{ contactId: contact.id }}
+            >
+              Eliminar contacto
+            </DeleteConfirmButton>
+          </div>
         </CardHeader>
         <CardContent className="grid gap-6">
           <form action={updateContactAction} className="space-y-4" aria-describedby="contact-detail-help">

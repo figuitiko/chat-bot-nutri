@@ -684,6 +684,18 @@ export async function createContactAction(formData: FormData) {
   redirectToContact(contact.id);
 }
 
+export async function deleteContactAction(formData: FormData) {
+  await requireAdminSession();
+
+  const contactId = String(formData.get("contactId") ?? "");
+  if (!contactId) throw new AppError("MISSING_CONTACT_ID", "contactId required", 400);
+
+  await db.contact.delete({ where: { id: contactId } });
+
+  revalidatePath("/dashboard/contacts");
+  redirect("/dashboard/contacts");
+}
+
 export async function updateContactAction(formData: FormData) {
   await requireAdminSession();
 
