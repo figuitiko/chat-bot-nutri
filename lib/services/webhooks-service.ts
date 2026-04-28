@@ -564,10 +564,16 @@ export async function processInboundWebhook(payload: Record<string, string | und
   if (!state.replied) {
     await handleLegacyEngine(context, state);
   }
-  if (!state.replied) {
+  // Only run rule routing if user already has a verified/active session.
+  // Unverified users (no accessState, no active conversation) must enter their keyword first.
+  const hasActiveSession =
+    context.activeCourseConversation ||
+    context.activeLegacyConversation ||
+    context.accessState !== null;
+  if (!state.replied && hasActiveSession) {
     await handleRuleRouting(context, state);
   }
-  if (!state.replied && !context.openConversation) {
+  if (!state.replied) {
     await startAccessPrompt(context, state);
   }
 
