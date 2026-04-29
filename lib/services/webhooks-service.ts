@@ -1,4 +1,4 @@
-import type { Prisma } from "@/generated/prisma/client";
+import type { Contact, Prisma } from "@/generated/prisma/client";
 
 import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
@@ -6,7 +6,6 @@ import { AppError } from "@/lib/http";
 import { normalizeText } from "@/lib/bot/state-machine";
 import { resolveInboundResponse } from "@/lib/bot/executor";
 import { parseWhatsAppAddress } from "@/lib/phone";
-import { upsertContactByPhone } from "@/lib/services/contacts-service";
 import {
   findOpenConversation,
   getConversationAccessState,
@@ -105,7 +104,7 @@ async function closeAllOpenConversations(contactId: string) {
   });
 }
 
-type InboundContact = Awaited<ReturnType<typeof upsertContactByPhone>>;
+type InboundContact = Contact;
 type OpenConversation = Awaited<ReturnType<typeof findOpenConversation>>;
 type GlobalCommand = ReturnType<typeof resolveGlobalCommand>;
 
@@ -198,13 +197,23 @@ async function registerInboundEvent(
 
 async function resolveInboundContact(payload: Record<string, string | undefined>) {
   const contactPhone = parseWhatsAppAddress(payload.From);
-  const contact = await upsertContactByPhone({
-    phone: contactPhone,
-    waId: payload.WaId,
-    profileName: payload.ProfileName,
+  const contact = await db.contact.findUnique({ where: { phone: contactPhone } });
+
+  if (!contact) {
+    logger.info("webhook.inbound.unregistered", { from: payload.From });
+    return { contact: null, contactPhone };
+  }
+
+  // Keep metadata in sync with WhatsApp profile on every inbound
+  const updated = await db.contact.update({
+    where: { id: contact.id },
+    data: {
+      ...(payload.WaId ? { waId: payload.WaId } : {}),
+      ...(payload.ProfileName ? { profileName: payload.ProfileName } : {}),
+    },
   });
 
-  return { contact, contactPhone };
+  return { contact: updated, contactPhone };
 }
 
 async function startAccessPrompt(
@@ -544,6 +553,11 @@ export async function processInboundWebhook(payload: Record<string, string | und
 
   const eventId = await registerInboundEvent(payload, providerMessageSid);
   const { contact, contactPhone } = await resolveInboundContact(payload);
+
+  if (!contact) {
+    return { duplicate: false, replied: false };
+  }
+
   const inboundInput = resolveInboundInput(payload);
   const openConversation = await findOpenConversation(contact.id);
   const context = createRoutingContext({
