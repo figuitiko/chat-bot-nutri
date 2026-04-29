@@ -28,7 +28,10 @@ import {
   startFlowConversation,
   sendTemplateByKey,
 } from "@/lib/services/flows-service";
-import { mapTwilioStatus, storeInboundMessage } from "@/lib/services/messages-service";
+import {
+  mapTwilioStatus,
+  storeInboundMessage,
+} from "@/lib/services/messages-service";
 
 async function upsertWebhookEvent(input: {
   source: "TWILIO_INBOUND" | "TWILIO_STATUS";
@@ -127,13 +130,18 @@ type InboundRoutingState = {
   responseMessageSid: string | null;
 };
 
-function createRoutingState(openConversation: OpenConversation): InboundRoutingState {
+function createRoutingState(
+  openConversation: OpenConversation,
+): InboundRoutingState {
   return {
     replied: false,
     conversationId: openConversation?.id ?? null,
-    matchedFlowKey: openConversation?.courseId ?? openConversation?.flowId ?? null,
+    matchedFlowKey:
+      openConversation?.courseId ?? openConversation?.flowId ?? null,
     matchedTemplateKey:
-      openConversation?.currentCourseStepId ?? openConversation?.currentStepId ?? null,
+      openConversation?.currentCourseStepId ??
+      openConversation?.currentStepId ??
+      null,
     responseMessageSid: null,
   };
 }
@@ -150,14 +158,17 @@ function createRoutingContext(input: {
     inboundInput: input.inboundInput,
     openConversation: input.openConversation,
     activeCourseConversation:
-      input.openConversation?.courseId && input.openConversation.currentCourseStepId
+      input.openConversation?.courseId &&
+      input.openConversation.currentCourseStepId
         ? input.openConversation
         : null,
     activeLegacyConversation:
       input.openConversation?.flowId && input.openConversation.currentStepId
         ? input.openConversation
         : null,
-    accessState: getConversationAccessState(input.openConversation?.contextData),
+    accessState: getConversationAccessState(
+      input.openConversation?.contextData,
+    ),
     globalCommand: resolveGlobalCommand(input.inboundInput),
   };
 }
@@ -184,7 +195,9 @@ async function registerInboundEvent(
   payload: Record<string, string | undefined>,
   providerMessageSid?: string,
 ) {
-  const eventId = providerMessageSid ? `inbound:${providerMessageSid}` : undefined;
+  const eventId = providerMessageSid
+    ? `inbound:${providerMessageSid}`
+    : undefined;
   await upsertWebhookEvent({
     source: "TWILIO_INBOUND",
     eventId,
@@ -195,9 +208,13 @@ async function registerInboundEvent(
   return eventId;
 }
 
-async function resolveInboundContact(payload: Record<string, string | undefined>) {
+async function resolveInboundContact(
+  payload: Record<string, string | undefined>,
+) {
   const contactPhone = parseWhatsAppAddress(payload.From);
-  const contact = await db.contact.findUnique({ where: { phone: contactPhone } });
+  const contact = await db.contact.findUnique({
+    where: { phone: contactPhone },
+  });
 
   if (!contact) {
     logger.info("webhook.inbound.unregistered", { from: payload.From });
@@ -209,7 +226,6 @@ async function resolveInboundContact(payload: Record<string, string | undefined>
     where: { id: contact.id },
     data: {
       ...(payload.WaId ? { waId: payload.WaId } : {}),
-      ...(payload.ProfileName ? { profileName: payload.ProfileName } : {}),
     },
   });
 
@@ -318,8 +334,9 @@ async function handleAccessRouting(
 
     state.conversationId = result.conversationId;
     state.responseMessageSid = result.providerMessageSid;
-    state.matchedTemplateKey =
-      result.selectedCourseId ? "course_selected" : "auth_secret_submission";
+    state.matchedTemplateKey = result.selectedCourseId
+      ? "course_selected"
+      : "auth_secret_submission";
     state.replied = true;
 
     if (result.selectedCourseId) {
@@ -337,7 +354,11 @@ async function handleAccessRouting(
     }
   }
 
-  if (state.replied || context.accessState !== "awaiting_course_selection" || !context.openConversation) {
+  if (
+    state.replied ||
+    context.accessState !== "awaiting_course_selection" ||
+    !context.openConversation
+  ) {
     return;
   }
 
@@ -544,7 +565,9 @@ async function finalizeInboundWebhook(input: {
   return inboundMessage;
 }
 
-export async function processInboundWebhook(payload: Record<string, string | undefined>) {
+export async function processInboundWebhook(
+  payload: Record<string, string | undefined>,
+) {
   const providerMessageSid = payload.MessageSid ?? payload.SmsSid;
 
   if (await ensureInboundMessageIsNotDuplicate(providerMessageSid)) {
@@ -582,8 +605,7 @@ export async function processInboundWebhook(payload: Record<string, string | und
   // Access-flow states (awaiting_secret, awaiting_course_selection, verified) are
   // already handled above; let them fall through to startAccessPrompt if needed.
   const hasActiveSession =
-    context.activeCourseConversation ||
-    context.activeLegacyConversation;
+    context.activeCourseConversation || context.activeLegacyConversation;
   if (!state.replied && hasActiveSession) {
     await handleRuleRouting(context, state);
   }
@@ -619,12 +641,18 @@ export async function processInboundWebhook(payload: Record<string, string | und
   };
 }
 
-export async function processStatusCallback(payload: Record<string, string | undefined>) {
+export async function processStatusCallback(
+  payload: Record<string, string | undefined>,
+) {
   const messageSid = payload.MessageSid;
   const messageStatus = payload.MessageStatus;
 
   if (!messageSid || !messageStatus) {
-    throw new AppError("INVALID_STATUS_CALLBACK", "Status callback is missing required fields.", 422);
+    throw new AppError(
+      "INVALID_STATUS_CALLBACK",
+      "Status callback is missing required fields.",
+      422,
+    );
   }
 
   const eventId = `status:${messageSid}:${messageStatus}`;
@@ -665,12 +693,18 @@ export async function processStatusCallback(payload: Record<string, string | und
   });
 
   if (!message) {
-    throw new AppError("MESSAGE_NOT_FOUND", "Provider message SID was not found.", 404);
+    throw new AppError(
+      "MESSAGE_NOT_FOUND",
+      "Provider message SID was not found.",
+      404,
+    );
   }
 
   const nextStatus = mapTwilioStatus(messageStatus);
   const messageRawPayload =
-    message.rawPayload && typeof message.rawPayload === "object" && !Array.isArray(message.rawPayload)
+    message.rawPayload &&
+    typeof message.rawPayload === "object" &&
+    !Array.isArray(message.rawPayload)
       ? (message.rawPayload as Record<string, unknown>)
       : {};
   const deferredFollowUp =
@@ -752,9 +786,9 @@ export async function processStatusCallback(payload: Record<string, string | und
               typeof deferredFollowUp.variables === "object" &&
               !Array.isArray(deferredFollowUp.variables)
                 ? Object.fromEntries(
-                    Object.entries(deferredFollowUp.variables as Record<string, unknown>).map(
-                      ([key, value]) => [key, String(value ?? "")],
-                    ),
+                    Object.entries(
+                      deferredFollowUp.variables as Record<string, unknown>,
+                    ).map(([key, value]) => [key, String(value ?? "")]),
                   )
                 : undefined,
           });
@@ -763,7 +797,9 @@ export async function processStatusCallback(payload: Record<string, string | und
 
       if (followUpType === "template" && templateKey) {
         const stepId =
-          typeof deferredFollowUp.stepId === "string" ? deferredFollowUp.stepId : undefined;
+          typeof deferredFollowUp.stepId === "string"
+            ? deferredFollowUp.stepId
+            : undefined;
         const step = stepId
           ? await db.botFlowStep.findUnique({
               where: { id: stepId },
@@ -786,9 +822,9 @@ export async function processStatusCallback(payload: Record<string, string | und
             typeof deferredFollowUp.variables === "object" &&
             !Array.isArray(deferredFollowUp.variables)
               ? Object.fromEntries(
-                  Object.entries(deferredFollowUp.variables as Record<string, unknown>).map(
-                    ([key, value]) => [key, String(value ?? "")],
-                  ),
+                  Object.entries(
+                    deferredFollowUp.variables as Record<string, unknown>,
+                  ).map(([key, value]) => [key, String(value ?? "")]),
                 )
               : undefined,
           step: step ?? undefined,
