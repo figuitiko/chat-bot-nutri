@@ -6,8 +6,8 @@ import {
   createCourseAction,
 } from "@/app/dashboard/actions";
 import { EmptyState } from "@/components/dashboard/empty-state";
+import { SubmitButton } from "@/components/dashboard/submit-button";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -85,16 +85,16 @@ export default async function CoursesPage() {
                 {!course.isActive ? (
                   <form action={activateCourseAction}>
                     <input type="hidden" name="courseId" value={course.id} />
-                    <Button type="submit" size="sm">
+                    <SubmitButton size="sm" pendingText="Activando...">
                       Activar
-                    </Button>
+                    </SubmitButton>
                   </form>
                 ) : null}
                 <form action={archiveCourseAction}>
                   <input type="hidden" name="courseId" value={course.id} />
-                  <Button type="submit" size="sm" variant="outline">
+                  <SubmitButton size="sm" variant="outline" pendingText="Archivando...">
                     Archivar
-                  </Button>
+                  </SubmitButton>
                 </form>
               </div>
             </div>
@@ -133,9 +133,9 @@ export default async function CoursesPage() {
                 <option value="ARCHIVED">ARCHIVED</option>
               </Select>
             </div>
-            <Button className="w-full" type="submit">
+            <SubmitButton className="w-full" pendingText="Creando...">
               Crear curso
-            </Button>
+            </SubmitButton>
           </form>
         </CardContent>
       </Card>

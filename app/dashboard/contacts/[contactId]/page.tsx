@@ -7,8 +7,8 @@ import {
 } from "@/app/dashboard/actions";
 import { DeleteConfirmButton } from "@/components/dashboard/delete-confirm-button";
 import { EmptyState } from "@/components/dashboard/empty-state";
+import { SubmitButton } from "@/components/dashboard/submit-button";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -93,7 +93,7 @@ export default async function ContactDetailPage({
               <Input id="profileName" name="profileName" defaultValue={contact.profileName ?? ""} />
             </div>
             <input name="locale" type="hidden" value={contact.locale} />
-            <Button type="submit">Guardar contacto</Button>
+            <SubmitButton>Guardar contacto</SubmitButton>
           </form>
 
           <div className="rounded-2xl bg-slate-50 p-4">
@@ -131,7 +131,7 @@ export default async function ContactDetailPage({
               <Label htmlFor="secret">Nueva clave secreta</Label>
               <Input id="secret" name="secret" minLength={6} autoComplete="new-password" required />
             </div>
-            <Button type="submit">Guardar o resetear clave</Button>
+            <SubmitButton>Guardar o resetear clave</SubmitButton>
           </form>
         </CardContent>
       </Card>
@@ -169,9 +169,9 @@ export default async function ContactDetailPage({
                 <form action={revokeCourseEnrollmentAction}>
                   <input type="hidden" name="contactId" value={contact.id} />
                   <input type="hidden" name="enrollmentId" value={enrollment.id} />
-                  <Button type="submit" size="sm" variant="outline">
+                  <SubmitButton size="sm" variant="outline" pendingText="Revocando...">
                     Revocar acceso
-                  </Button>
+                  </SubmitButton>
                 </form>
               ) : null}
             </div>
@@ -193,7 +193,7 @@ export default async function ContactDetailPage({
             <p className="text-sm text-slate-500">
               Solo los cursos asignados apareceran para este learner cuando escriba la clave correcta.
             </p>
-            <Button type="submit">Asignar curso</Button>
+            <SubmitButton pendingText="Asignando...">Asignar curso</SubmitButton>
           </form>
         </CardContent>
       </Card>

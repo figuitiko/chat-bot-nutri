@@ -19,8 +19,8 @@ import { CourseEditorStepNavigation, CourseEditorStepPager } from "@/components/
 import { StepSaveButton } from "@/components/dashboard/step-save-button";
 import { CourseModuleList } from "@/components/dashboard/course-module-list";
 import { DeleteConfirmButton } from "@/components/dashboard/delete-confirm-button";
+import { SubmitButton } from "@/components/dashboard/submit-button";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -167,7 +167,7 @@ export default async function CourseEditorPage({
                   </Select>
                 </div>
                 <div className="flex items-end gap-2">
-                  <Button type="submit">Guardar curso</Button>
+                  <SubmitButton>Guardar curso</SubmitButton>
                 </div>
               </div>
             </form>
@@ -181,9 +181,9 @@ export default async function CourseEditorPage({
                     Si tus cambios no aparecen en el chat, limpiá el caché para que Twilio regenere los templates.
                   </p>
                 </div>
-                <Button type="submit" variant="outline">
+                <SubmitButton variant="outline" pendingText="Limpiando...">
                   Limpiar caché
-                </Button>
+                </SubmitButton>
               </div>
             </form>
 
@@ -199,9 +199,9 @@ export default async function CourseEditorPage({
                       Solo un curso puede quedar activo para nuevas conversaciones. Los learners ya iniciados permanecen en su curso actual.
                     </p>
                   </div>
-                  <Button type="submit" variant="secondary">
+                  <SubmitButton variant="secondary" pendingText="Activando...">
                     Activar para nuevas conversaciones
-                  </Button>
+                  </SubmitButton>
                 </div>
               </form>
             ) : null}
@@ -226,9 +226,9 @@ export default async function CourseEditorPage({
               <input type="hidden" name="targetId" value={course.id} />
               <input type="hidden" name="kind" value="IMAGE" />
               <Input name="file" type="file" accept="image/*" required />
-              <Button className="w-full" type="submit" variant="outline">
+              <SubmitButton className="w-full" variant="outline" pendingText="Subiendo...">
                 Subir portada
-              </Button>
+              </SubmitButton>
             </form>
           </div>
         </CardContent>
@@ -347,7 +347,7 @@ export default async function CourseEditorPage({
                 <Input name="title" placeholder="Nuevo modulo" />
                 <Input name="slug" placeholder="nuevo-modulo" />
                 <Textarea name="summary" placeholder="Resumen del modulo" />
-                <Button type="submit">Agregar modulo</Button>
+                <SubmitButton pendingText="Agregando...">Agregar modulo</SubmitButton>
               </form>
             </CardContent>
           </Card>
@@ -376,9 +376,9 @@ export default async function CourseEditorPage({
                   <Input name="title" defaultValue={selectedModule.title} />
                   <Input name="slug" defaultValue={selectedModule.slug} />
                   <Textarea name="summary" defaultValue={selectedModule.summary ?? ""} />
-                  <Button type="submit" variant="outline">
+                  <SubmitButton variant="outline">
                     Guardar modulo
-                  </Button>
+                  </SubmitButton>
                 </form>
                 <DeleteConfirmButton
                   action={deleteModuleAction}
@@ -410,9 +410,9 @@ export default async function CourseEditorPage({
                     <input type="hidden" name="targetId" value={selectedModule.id} />
                     <input type="hidden" name="kind" value="IMAGE" />
                     <Input name="file" type="file" accept="image/*" />
-                    <Button type="submit" variant="ghost">
+                    <SubmitButton variant="ghost" pendingText="Subiendo...">
                       Subir intro del modulo
-                    </Button>
+                    </SubmitButton>
                   </form>
                 </div>
               </CardContent>
@@ -528,7 +528,7 @@ export default async function CourseEditorPage({
                       <option value="CHOICE">CHOICE</option>
                       <option value="FREE_TEXT">FREE_TEXT</option>
                     </Select>
-                    <Button type="submit">Agregar paso</Button>
+                    <SubmitButton pendingText="Agregando...">Agregar paso</SubmitButton>
                   </form>
                 </>
               ) : (
@@ -631,9 +631,9 @@ export default async function CourseEditorPage({
                     <input type="hidden" name="targetId" value={selectedStep.id} />
                     <input type="hidden" name="kind" value="IMAGE" />
                     <Input className="max-w-sm" name="file" type="file" />
-                    <Button type="submit" variant="ghost">
+                    <SubmitButton variant="ghost" pendingText="Subiendo...">
                       Subir asset del paso
-                    </Button>
+                    </SubmitButton>
                   </form>
 
                   {selectedStep.transitions.length > 0 ? (
@@ -674,7 +674,7 @@ export default async function CourseEditorPage({
                               </Select>
                               <Input name="priority" defaultValue={String(transition.priority)} placeholder="100" />
                             </div>
-                            <Button type="submit" size="sm" variant="outline" className="w-fit">Guardar</Button>
+                            <SubmitButton size="sm" variant="outline" className="w-fit">Guardar</SubmitButton>
                           </form>
                           <DeleteConfirmButton
                             action={deleteTransitionAction}
@@ -725,9 +725,9 @@ export default async function CourseEditorPage({
                       </Select>
                       <Input name="priority" placeholder="100" />
                     </div>
-                    <Button type="submit" variant="ghost">
+                    <SubmitButton variant="ghost" pendingText="Agregando...">
                       Agregar transicion
-                    </Button>
+                    </SubmitButton>
                   </form>
 
                   <Separator />
@@ -777,7 +777,7 @@ export default async function CourseEditorPage({
                       <option value="CHOICE">CHOICE</option>
                       <option value="FREE_TEXT">FREE_TEXT</option>
                     </Select>
-                    <Button type="submit">Agregar paso</Button>
+                    <SubmitButton pendingText="Agregando...">Agregar paso</SubmitButton>
                   </form>
                 </div>
               )}

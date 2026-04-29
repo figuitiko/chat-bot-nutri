@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { logoutAction } from "@/app/login/actions";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/dashboard/submit-button";
 import { requireAdminSession } from "@/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
@@ -44,9 +44,9 @@ export default async function DashboardLayout({
               Contactos
             </Link>
             <form action={logoutAction}>
-              <Button type="submit" variant="outline">
+              <SubmitButton variant="outline" pendingText="Saliendo...">
                 Salir ({admin.name})
-              </Button>
+              </SubmitButton>
             </form>
           </nav>
         </div>

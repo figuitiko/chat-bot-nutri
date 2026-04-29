@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { createContactAction } from "@/app/dashboard/actions";
 import { ContactSearchInput } from "@/components/dashboard/contact-search-input";
 import { EmptyState } from "@/components/dashboard/empty-state";
+import { SubmitButton } from "@/components/dashboard/submit-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -182,9 +183,9 @@ export default async function ContactsPage({
               <Input id="profileName" name="profileName" />
             </div>
             <input name="locale" type="hidden" value="es-MX" />
-            <Button className="w-full" type="submit">
+            <SubmitButton className="w-full">
               Guardar contacto
-            </Button>
+            </SubmitButton>
           </form>
         </CardContent>
       </Card>
