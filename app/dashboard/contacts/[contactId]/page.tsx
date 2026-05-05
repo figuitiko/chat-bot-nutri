@@ -24,7 +24,7 @@ export default async function ContactDetailPage({
   params: Promise<{ contactId: string }>;
 }) {
   const { contactId } = await params;
-  const [contact, courses] = await Promise.all([
+  const [contact, courses, inboundCount, outboundCount] = await Promise.all([
     db.contact.findUnique({
       where: { id: contactId },
       include: {
@@ -47,6 +47,8 @@ export default async function ContactDetailPage({
       },
       orderBy: [{ isActive: "desc" }, { name: "asc" }],
     }),
+    db.message.count({ where: { contactId, direction: "INBOUND" } }),
+    db.message.count({ where: { contactId, direction: "OUTBOUND" } }),
   ]);
 
   if (!contact) {
@@ -96,7 +98,7 @@ export default async function ContactDetailPage({
             <SubmitButton>Guardar contacto</SubmitButton>
           </form>
 
-          <div className="rounded-2xl bg-slate-50 p-4">
+          <div className="rounded-2xl bg-slate-50 p-4 space-y-3">
             <div className="flex flex-wrap items-center gap-2">
               {contact.accessCredential?.isActive ? (
                 <Badge variant="success">Clave activa</Badge>
@@ -107,7 +109,17 @@ export default async function ContactDetailPage({
                 <Badge variant="destructive">Bloqueado</Badge>
               ) : null}
             </div>
-            <p className="mt-3 text-sm text-slate-600">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-xl bg-white border border-slate-200 p-3 text-center">
+                <p className="text-2xl font-bold text-slate-900">{inboundCount}</p>
+                <p className="text-xs text-slate-500 mt-0.5">Mensajes recibidos</p>
+              </div>
+              <div className="rounded-xl bg-white border border-slate-200 p-3 text-center">
+                <p className="text-2xl font-bold text-slate-900">{outboundCount}</p>
+                <p className="text-xs text-slate-500 mt-0.5">Mensajes enviados</p>
+              </div>
+            </div>
+            <p className="text-sm text-slate-600">
               Intentos fallidos: {contact.accessCredential?.failedAttempts ?? 0}
             </p>
             <p className="text-sm text-slate-600">
