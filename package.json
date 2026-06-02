@@ -22,7 +22,8 @@
     "prepare": "husky",
     "checks": "npm run lint && npm run typecheck && npm run test:run",
     "prepush": "npm run checks",
-    "db:clear-contacts": "tsx prisma/clear-contacts.ts"
+    "db:clear-contacts": "tsx prisma/clear-contacts.ts",
+    "db:seed:emprende": "tsx prisma/seed-emprende-course.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
