@@ -24,6 +24,7 @@ import { upsertContactByPhone } from "@/lib/services/contacts-service";
 import { setContactAccessSecret } from "@/lib/services/access-service";
 import { buildReorderUpdates } from "@/lib/dashboard/course-reorder";
 import { buildCourseStatusUpdateData, buildSetDefaultCourseUpdates } from "@/lib/dashboard/course-publication";
+import { validateCourseStepBody } from "@/lib/dashboard/course-step-validation";
 import {
   buildCourseStepCreateData,
   buildCourseStepUpdateData,
@@ -52,7 +53,7 @@ const stepInputSchema = z.object({
   stepId: z.string().optional(),
   title: z.string().min(1),
   slug: z.string().min(1),
-  body: z.string().min(1),
+  body: z.string(),
   stepType: z.nativeEnum(CourseStepType),
   kind: z.nativeEnum(TemplateKind),
   deliveryMode: z.nativeEnum(TemplateDeliveryMode),
@@ -65,6 +66,15 @@ const stepInputSchema = z.object({
   scoreWeight: z.coerce.number().int().min(0).max(100).optional(),
   isAssessmentResult: z.coerce.boolean().default(false),
   isTerminal: z.coerce.boolean().default(false),
+}).superRefine((input, context) => {
+  if (!validateCourseStepBody(input)) {
+    context.addIssue({
+      code: "custom",
+      path: ["body"],
+      message:
+        "El cuerpo es obligatorio salvo que el paso tenga media adjunta y se envie como STANDARD o MEDIA_FIRST.",
+    });
+  }
 });
 
 const transitionInputSchema = z.object({

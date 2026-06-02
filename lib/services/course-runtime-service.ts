@@ -604,11 +604,14 @@ export async function sendCourseStep(input: {
   skipMedia?: boolean;
 }) {
   const resolvedMediaUrl = input.skipMedia ? undefined : resolveStepMediaUrl(input.step.mediaUrl);
-  const renderedBody = buildStepBodyWithDeliveryMode({
-    body: renderTemplateBody(ensureTemplateBody(input.step.body), input.variables),
-    deliveryMode: input.step.deliveryMode,
-    resolvedMediaUrl,
-  });
+  const rawBody = input.step.body.trim();
+  const renderedBody = rawBody
+    ? buildStepBodyWithDeliveryMode({
+        body: renderTemplateBody(rawBody, input.variables),
+        deliveryMode: input.step.deliveryMode,
+        resolvedMediaUrl,
+      })
+    : "";
   const attachableMediaUrl =
     input.step.deliveryMode === "LINK_ONLY" ? undefined : resolvedMediaUrl;
 
@@ -619,12 +622,26 @@ export async function sendCourseStep(input: {
       conversationId: input.conversationId,
       courseStepId: input.step.id,
       mediaUrl: attachableMediaUrl,
-      deferredFollowUp: {
-        type: "course-step",
-        courseStepId: input.step.id,
-        conversationId: input.conversationId,
-        variables: input.variables,
-      },
+      deferredFollowUp: renderedBody
+        ? {
+            type: "course-step",
+            courseStepId: input.step.id,
+            conversationId: input.conversationId,
+            variables: input.variables,
+          }
+        : undefined,
+    });
+
+    return { providerMessage, persisted: null };
+  }
+
+  if (attachableMediaUrl && !renderedBody) {
+    const providerMessage = await sendMediaAttachment({
+      contactId: input.contactId,
+      contactPhone: input.contactPhone,
+      conversationId: input.conversationId,
+      courseStepId: input.step.id,
+      mediaUrl: attachableMediaUrl,
     });
 
     return { providerMessage, persisted: null };
