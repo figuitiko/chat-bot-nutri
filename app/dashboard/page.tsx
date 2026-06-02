@@ -9,7 +9,7 @@ import { db } from "@/lib/db";
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  const [activeCourse, courseCount, openConversations, contactCount, enrollmentCount] = await Promise.all([
+  const [activeCourse, courseCount, publishedCourseCount, openConversations, contactCount, enrollmentCount] = await Promise.all([
     db.course.findFirst({
       where: { isActive: true },
       include: {
@@ -21,6 +21,7 @@ export default async function DashboardPage() {
       },
     }),
     db.course.count(),
+    db.course.count({ where: { status: "ACTIVE" } }),
     db.conversation.count({
       where: {
         status: "OPEN",
@@ -39,25 +40,28 @@ export default async function DashboardPage() {
     <div className="grid gap-6">
       <Card>
         <CardHeader>
-          <CardTitle>Curso activo para nuevas conversaciones</CardTitle>
+          <CardTitle>Curso default para nuevas conversaciones</CardTitle>
           <CardDescription>
-            Los nuevos learners arrancan en el curso activo. Las conversaciones ya iniciadas se
-            mantienen fijadas al curso con el que comenzaron.
+            Varios cursos pueden estar publicados. Los nuevos learners sin selección arrancan en el curso default. Las conversaciones ya iniciadas se mantienen fijadas al curso con el que comenzaron.
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <CardContent className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
           <div className="rounded-2xl bg-slate-50 p-4">
-            <p className="text-sm text-slate-500">Curso activo</p>
+            <p className="text-sm text-slate-500">Curso default</p>
             <p className="mt-1 text-lg font-semibold">{activeCourse?.name ?? "Sin activar"}</p>
             {activeCourse?.isActive ? (
               <Badge className="mt-2" variant="success">
-                Activo
+                Default
               </Badge>
             ) : null}
           </div>
           <div className="rounded-2xl bg-slate-50 p-4">
             <p className="text-sm text-slate-500">Cursos cargados</p>
             <p className="mt-1 text-lg font-semibold">{courseCount}</p>
+          </div>
+          <div className="rounded-2xl bg-slate-50 p-4">
+            <p className="text-sm text-slate-500">Cursos publicados</p>
+            <p className="mt-1 text-lg font-semibold">{publishedCourseCount}</p>
           </div>
           <div className="rounded-2xl bg-slate-50 p-4">
             <p className="text-sm text-slate-500">Conversaciones abiertas</p>
@@ -87,7 +91,7 @@ export default async function DashboardPage() {
             </p>
             <div className="flex flex-wrap gap-3">
               <Button asChild>
-                <Link href={`/dashboard/courses/${activeCourse.id}`}>Abrir editor del curso activo</Link>
+                <Link href={`/dashboard/courses/${activeCourse.id}`}>Abrir editor del curso default</Link>
               </Button>
               <Button asChild variant="outline">
                 <Link href="/dashboard/contacts">Gestionar contactos y accesos</Link>

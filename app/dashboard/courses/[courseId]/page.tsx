@@ -128,10 +128,10 @@ export default async function CourseEditorPage({
         <CardHeader>
           <div className="flex flex-wrap items-center gap-2">
             <CardTitle>{course.name}</CardTitle>
-            {course.isActive ? <Badge variant="success">Activo</Badge> : <Badge>{course.status}</Badge>}
+            {course.isActive ? <Badge variant="success">Default</Badge> : course.status === "ACTIVE" ? <Badge variant="success">Publicado</Badge> : <Badge>{course.status}</Badge>}
           </div>
           <CardDescription>
-            Edita la metadata del curso, activa la version publicada y administra assets.
+            Edita la metadata del curso, publícalo y define si será el curso default para nuevas conversaciones.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6 lg:grid-cols-[1fr_320px]">
@@ -141,7 +141,7 @@ export default async function CourseEditorPage({
               <input type="hidden" name="moduleSlug" value={selectedModule?.slug ?? ""} />
               <input type="hidden" name="stepSlug" value={selectedStep?.slug ?? ""} />
               <p id="course-editor-help" className="text-sm text-slate-500">
-                Edita esta version en borrador o activa el curso cuando todos los modulos, pasos y evaluaciones esten completos.
+                Edita esta versión en borrador, publícala cuando esté lista y usa el botón de default solo para el curso inicial de nuevas conversaciones.
               </p>
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
@@ -194,13 +194,13 @@ export default async function CourseEditorPage({
                 <input type="hidden" name="stepSlug" value={selectedStep?.slug ?? ""} />
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                   <div>
-                    <p className="font-medium text-slate-950">Publicacion controlada</p>
+                    <p className="font-medium text-slate-950">Curso default</p>
                     <p className="text-sm text-slate-600">
-                      Solo un curso puede quedar activo para nuevas conversaciones. Los learners ya iniciados permanecen en su curso actual.
+                      Varios cursos pueden estar publicados. Este botón solo define cuál será el default para nuevas conversaciones genéricas.
                     </p>
                   </div>
-                  <SubmitButton variant="secondary" pendingText="Activando...">
-                    Activar para nuevas conversaciones
+                  <SubmitButton variant="secondary" pendingText="Configurando...">
+                    Hacer default para nuevas conversaciones
                   </SubmitButton>
                 </div>
               </form>
@@ -210,7 +210,7 @@ export default async function CourseEditorPage({
           <div className="space-y-3 rounded-2xl bg-slate-50 p-4">
             <p className="text-sm font-medium text-slate-700">Portada del curso</p>
             <p className="text-xs text-slate-500">
-              Los learners actuales siguen en su curso actual aunque actives otra version.
+              Los learners actuales siguen en su curso actual aunque cambies el curso default.
             </p>
             {course.coverAsset ? (
               <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">

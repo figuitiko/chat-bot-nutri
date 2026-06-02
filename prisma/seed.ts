@@ -2556,7 +2556,6 @@ async function main() {
     data: {
       isActive: false,
       activatedAt: null,
-      status: CourseStatus.DRAFT,
     },
   });
 

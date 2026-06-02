@@ -41,7 +41,7 @@ export default async function CoursesPage() {
         <CardHeader>
           <CardTitle>Cursos</CardTitle>
           <CardDescription>
-            Solo un curso puede estar activo para nuevas conversaciones.
+            Varios cursos pueden estar publicados, pero solo uno queda como curso default para nuevas conversaciones.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
@@ -66,8 +66,8 @@ export default async function CoursesPage() {
                   >
                     {course.name}
                   </Link>
-                  {course.isActive ? <Badge variant="success">Activo</Badge> : null}
-                  <Badge>{course.status}</Badge>
+                  {course.isActive ? <Badge variant="success">Default</Badge> : null}
+                  {course.status === "ACTIVE" ? <Badge variant="success">Publicado</Badge> : <Badge>{course.status}</Badge>}
                 </div>
                 <p className="text-sm text-slate-600">{course.description ?? "Sin descripcion"}</p>
                 <p className="text-xs text-slate-500">
@@ -85,8 +85,8 @@ export default async function CoursesPage() {
                 {!course.isActive ? (
                   <form action={activateCourseAction}>
                     <input type="hidden" name="courseId" value={course.id} />
-                    <SubmitButton size="sm" pendingText="Activando...">
-                      Activar
+                    <SubmitButton size="sm" pendingText="Configurando...">
+                      Hacer default
                     </SubmitButton>
                   </form>
                 ) : null}
@@ -112,7 +112,7 @@ export default async function CoursesPage() {
         <CardContent>
           <form action={createCourseAction} className="space-y-4" aria-describedby="course-create-help">
             <p id="course-create-help" className="text-sm text-slate-500">
-              El curso se crea en borrador y despues puedes subir portada, armar modulos y activar la version final.
+              El curso se crea en borrador. Después podés publicar varios cursos y elegir solo uno como default.
             </p>
             <div className="space-y-2">
               <Label htmlFor="name">Nombre</Label>

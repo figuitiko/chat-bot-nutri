@@ -152,8 +152,7 @@ export default async function ContactDetailPage({
         <CardHeader>
           <CardTitle>Cursos asignados</CardTitle>
           <CardDescription>
-            Si el contacto tiene varios cursos activos, el bot mostrara un selector despues de
-            validar la clave.
+            Si el contacto tiene varios cursos publicados, el bot mostrará un selector después de validar la clave.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
@@ -161,7 +160,7 @@ export default async function ContactDetailPage({
             <EmptyState
               eyebrow="Inscripciones"
               title="Este contacto aun no tiene cursos asignados"
-              description="Asigna uno o varios cursos activos o en borrador. Si hay varios, el bot mostrara un selector despues de validar la clave."
+              description="Asigna uno o varios cursos publicados. Si hay varios, el bot mostrará un selector después de validar la clave."
             />
           ) : null}
           {contact.enrollments.map((enrollment) => (
@@ -173,7 +172,8 @@ export default async function ContactDetailPage({
                 <div className="flex items-center gap-2">
                   <span className="font-medium text-slate-950">{enrollment.course.name}</span>
                   {enrollment.isActive ? <Badge variant="success">Activo</Badge> : <Badge>Inactivo</Badge>}
-                  {enrollment.course.isActive ? <Badge>Curso publicado</Badge> : null}
+                  {enrollment.course.status === "ACTIVE" ? <Badge>Curso publicado</Badge> : null}
+                  {enrollment.course.isActive ? <Badge>Default</Badge> : null}
                 </div>
                 <p className="text-sm text-slate-600">{enrollment.course.slug}</p>
               </div>

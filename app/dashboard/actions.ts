@@ -23,6 +23,7 @@ import { normalizePhone } from "@/lib/phone";
 import { upsertContactByPhone } from "@/lib/services/contacts-service";
 import { setContactAccessSecret } from "@/lib/services/access-service";
 import { buildReorderUpdates } from "@/lib/dashboard/course-reorder";
+import { buildCourseStatusUpdateData, buildSetDefaultCourseUpdates } from "@/lib/dashboard/course-publication";
 import {
   buildCourseStepCreateData,
   buildCourseStepUpdateData,
@@ -277,7 +278,7 @@ export async function updateCourseAction(formData: FormData) {
       name: input.name,
       slug: input.slug,
       description: input.description,
-      status: input.status,
+      ...buildCourseStatusUpdateData(input.status),
     },
   });
 
@@ -290,26 +291,19 @@ export async function activateCourseAction(formData: FormData) {
 
   await validateCourseActivation(courseId);
 
+  const defaultCourseUpdates = buildSetDefaultCourseUpdates();
+
   await db.$transaction([
     db.course.updateMany({
       where: {
         isActive: true,
         id: { not: courseId },
       },
-      data: {
-        isActive: false,
-        activatedAt: null,
-        status: CourseStatus.DRAFT,
-      },
+      data: defaultCourseUpdates.unsetOtherDefaults,
     }),
     db.course.update({
       where: { id: courseId },
-      data: {
-        isActive: true,
-        activatedAt: new Date(),
-        archivedAt: null,
-        status: CourseStatus.ACTIVE,
-      },
+      data: defaultCourseUpdates.setSelectedDefault,
     }),
   ]);
 
