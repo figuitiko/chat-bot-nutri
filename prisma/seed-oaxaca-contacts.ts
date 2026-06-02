@@ -137,8 +137,6 @@ async function main() {
   });
 
   const secretHash = await hash(SECRET, 10);
-  let created = 0;
-  let updated = 0;
 
   for (const raw of RAW_CONTACTS) {
     const phone = normalizePhone(raw.phone);
@@ -149,10 +147,6 @@ async function main() {
       update: { name: raw.name },
       select: { id: true, phone: true },
     });
-
-    const wasNew = !contact;
-    created += wasNew ? 1 : 0;
-    updated += wasNew ? 0 : 1;
 
     await prisma.contactAccessCredential.upsert({
       where: { contactId: contact.id },
@@ -192,7 +186,9 @@ async function main() {
     console.log(`✓ ${raw.name} (${phone})`);
   }
 
-  console.log(`\nDone: ${RAW_CONTACTS.length} contacts processed for course "${COURSE_SLUG}" with secret "${SECRET}".`);
+  console.log(
+    `\nDone: ${RAW_CONTACTS.length} contacts processed for course "${COURSE_SLUG}" with secret "${SECRET}".`,
+  );
 }
 
 main()
