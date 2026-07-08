@@ -32,6 +32,7 @@ import {
   mapTwilioStatus,
   storeInboundMessage,
 } from "@/lib/services/messages-service";
+import { shouldUseLegacyRuleRouting } from "@/lib/services/webhooks-routing";
 
 async function upsertWebhookEvent(input: {
   source: "TWILIO_INBOUND" | "TWILIO_STATUS";
@@ -601,12 +602,16 @@ export async function processInboundWebhook(
   if (!state.replied) {
     await handleLegacyEngine(context, state);
   }
-  // Rule routing only for contacts actively inside a course or legacy flow.
-  // Access-flow states (awaiting_secret, awaiting_course_selection, verified) are
-  // already handled above; let them fall through to startAccessPrompt if needed.
-  const hasActiveSession =
-    context.activeCourseConversation || context.activeLegacyConversation;
-  if (!state.replied && hasActiveSession) {
+  // Legacy BotRule routing is only valid for legacy conversations.
+  // Course conversations must never fall through to legacy FALLBACK rules because
+  // those rules can start an unrelated course flow such as the old Nutri welcome.
+  if (
+    !state.replied &&
+    shouldUseLegacyRuleRouting({
+      hasActiveCourseConversation: Boolean(context.activeCourseConversation),
+      hasActiveLegacyConversation: Boolean(context.activeLegacyConversation),
+    })
+  ) {
     await handleRuleRouting(context, state);
   }
   if (!state.replied) {
